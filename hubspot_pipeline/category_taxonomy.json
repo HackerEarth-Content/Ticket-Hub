@@ -1,0 +1,41 @@
+{
+  "_comment": "Draft category -> module grouping, built from a live 500-ticket sample (2026-07-03). Needs sign-off from the support team -- see handoff.md open question #4. Categories not listed here fall into 'Other'.",
+  "modules": {
+    "Assessment/Testing": [
+      "Test Reports", "Test Access", "Test Loading Issues", "Submission Related",
+      "Assessment", "Assessment info", "Test Creation", "Section Creation", "Result enquiry"
+    ],
+    "Proctoring": [
+      "Proctoring B2C", "Compatibility", "Webcam", "Audio/Video Issue", "IDE/Compiler",
+      "Proctoring Setting"
+    ],
+    "Interviews": [
+      "Joining an Interview", "Creating an Interview", "Invite Issues", "Invites"
+    ],
+    "Account/Access": [
+      "Activate/Verify Account", "Delete Account Request", "Delete Request",
+      "Unable to Login", "Login issues", "Email/Phone Change Request",
+      "Account Renewals", "Team Management", "Team Related"
+    ],
+    "Contests/Events": [
+      "Contest Info", "Registration Related", "Hackathon", "Prize", "Online Plans"
+    ],
+    "Sales": [
+      "Sales Enquiry", "Job Request", "Shortlist Enquiry"
+    ],
+    "Content/Platform": [
+      "Dashboard Issues", "Product Knowledge", "Content", "Collaboration/Marketing",
+      "B2B Knowledge", "Platform Overview", "Question Issue", "Evaluation",
+      "Evaluation Grievance"
+    ],
+    "Non-Actionable": [
+      "Not Actionable", "No Action Required", "Spam", "No Information Received",
+      "Others", "Other", "Bug Bounty", "Community"
+    ]
+  },
+  "typo_map": {
+    "Campatibility": "Compatibility",
+    "Overview": "Platform Overview",
+    "Email Change Request": "Email/Phone Change Request"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "_comment": "Canonical status per pipeline stage_id. Buckets: New, Open, Pending, Closing, Resolved. Support Pipeline confirmed against live data (2026-07-03). GT Support / Customer Success / Marketing Support are best-guess from stage labels only (near-zero sample volume) and need sign-off from the portal owner -- see handoff.md open question #5.",
+  "pipelines": {
+    "0": {
+      "_label": "Support Pipeline",
+      "_confirmed": true,
+      "stages": {
+        "54370401": "New",
+        "1": "Open",
+        "1208415673": "Pending",
+        "1340014938": "Pending",
+        "70862658": "Pending",
+        "145535610": "Pending",
+        "209199970": "Pending",
+        "2": "Pending",
+        "1114226809": "Pending",
+        "1289560323": "Pending",
+        "1289560324": "Closing",
+        "1266321680": "Pending",
+        "143535403": "Closing",
+        "143535404": "Closing",
+        "54413370": "Resolved",
+        "4": "Resolved",
+        "1323393359": "New",
+        "1369778078": "New",
+        "1384427631": "Open"
+      }
+    },
+    "913510303": {
+      "_label": "GT Support Pipeline",
+      "_confirmed": false,
+      "stages": {
+        "1388840362": "New",
+        "1388840363": "Open",
+        "1388848219": "Pending",
+        "1388840367": "Pending",
+        "1388840377": "Resolved"
+      }
+    },
+    "38932318": {
+      "_label": "Customer Success",
+      "_confirmed": false,
+      "stages": {
+        "82999414": "New",
+        "82949043": "Open",
+        "82999415": "Pending",
+        "82999416": "Pending",
+        "82999417": "Resolved"
+      }
+    },
+    "23707277": {
+      "_label": "Marketing Support",
+      "_confirmed": false,
+      "stages": {
+        "55787115": "New",
+        "55793779": "Open",
+        "55793778": "Pending",
+        "55787118": "Resolved"
+      }
+    }
+  }
+}
