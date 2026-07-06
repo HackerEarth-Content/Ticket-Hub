@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { Period, SyncStatus } from "../types";
-import { formatIstTime, formatNumber, formatRelativeTime } from "../format";
+import { formatIstTime, formatNumber, formatRelativeTime, todayIstDate } from "../format";
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: "today", label: "Today" },
@@ -7,6 +8,12 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: "week", label: "Week" },
   { key: "month", label: "Month" },
 ];
+
+function parseCustomRange(period: Period): [string, string] | null {
+  if (!period.startsWith("custom:")) return null;
+  const [, start, end] = period.split(":");
+  return [start, end];
+}
 
 interface Props {
   period: Period;
@@ -32,6 +39,17 @@ export function Header({
   const stale = sync?.last_synced_at
     ? Date.now() - new Date(sync.last_synced_at).getTime() > 30 * 60_000
     : false;
+
+  const customRange = parseCustomRange(period);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftStart, setDraftStart] = useState(customRange?.[0] ?? "");
+  const [draftEnd, setDraftEnd] = useState(customRange?.[1] ?? "");
+
+  function applyCustomRange() {
+    if (!draftStart || !draftEnd) return;
+    onPeriodChange(`custom:${draftStart}:${draftEnd}`);
+    setPickerOpen(false);
+  }
 
   return (
     <header className="top">
@@ -60,17 +78,57 @@ export function Header({
         >
           {syncing ? "⏳" : "🔄"}
         </button>
-        <div className="period-group" role="group" aria-label="Date range">
-          {PERIODS.map((p) => (
+        <div className="period-group-wrap">
+          <div className="period-group" role="group" aria-label="Date range">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                className={period === p.key ? "active" : ""}
+                onClick={() => {
+                  onPeriodChange(p.key);
+                  setPickerOpen(false);
+                }}
+                aria-pressed={period === p.key}
+              >
+                {p.label}
+              </button>
+            ))}
             <button
-              key={p.key}
-              className={period === p.key ? "active" : ""}
-              onClick={() => onPeriodChange(p.key)}
-              aria-pressed={period === p.key}
+              className={customRange ? "active" : ""}
+              onClick={() => setPickerOpen((o) => !o)}
+              aria-pressed={!!customRange}
+              aria-expanded={pickerOpen}
             >
-              {p.label}
+              {customRange ? `${customRange[0]} → ${customRange[1]}` : "Custom"}
             </button>
-          ))}
+          </div>
+          {pickerOpen && (
+            <div className="custom-range-picker">
+              <input
+                type="date"
+                value={draftStart}
+                max={draftEnd || todayIstDate()}
+                onChange={(e) => setDraftStart(e.target.value)}
+                aria-label="Range start date"
+              />
+              <span>to</span>
+              <input
+                type="date"
+                value={draftEnd}
+                min={draftStart || undefined}
+                max={todayIstDate()}
+                onChange={(e) => setDraftEnd(e.target.value)}
+                aria-label="Range end date"
+              />
+              <button
+                className="apply-btn"
+                onClick={applyCustomRange}
+                disabled={!draftStart || !draftEnd}
+              >
+                Apply
+              </button>
+            </div>
+          )}
         </div>
         <button
           className="icon-btn"

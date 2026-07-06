@@ -36,3 +36,11 @@ export function formatIstTime(iso: string | null): string {
   });
   return `${time} IST`;
 }
+
+/** Today's calendar date in IST, as YYYY-MM-DD -- matches the backend's
+ * period boundaries (resolve_period), which also key off IST, not the
+ * viewer's local timezone or UTC. Using UTC here would clip the custom date
+ * picker's "today" by up to 5.5h during the first stretch of the IST day. */
+export function todayIstDate(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}

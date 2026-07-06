@@ -1,4 +1,5 @@
-"""Dashboard routes. Thin -- all query/KPI logic lives in utils.py."""
+"""Dashboard routes. Thin -- all query/KPI logic lives in utils.py,
+backline.py, and frontline.py."""
 
 from __future__ import annotations
 
@@ -6,12 +7,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
-from dashboard import utils
+from dashboard import backline, frontline, utils
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-PeriodParam = Query("week", pattern="^(today|yesterday|week|month)$")
+
+PeriodParam = Query("week", pattern=r"^(today|yesterday|week|month|custom:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2})$")
 
 
 @router.get("/live/today")
@@ -85,6 +87,59 @@ async def kpis_data_quality(
     period: str = PeriodParam, session: AsyncSession = Depends(get_session)
 ):
     return await utils.get_data_quality(session, period)
+
+
+@router.get("/backline/overview")
+async def backline_overview(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await backline.get_backline_overview(session, period)
+
+
+@router.get("/backline/ae-performance")
+async def backline_ae_performance(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
+    return await backline.get_backline_ae_performance(session, period)
+
+
+@router.get("/backline/escalations")
+async def backline_escalations(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await backline.get_backline_escalations(session, period)
+
+
+@router.get("/backline/stage-timing")
+async def backline_stage_timing(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
+    return await backline.get_backline_stage_timing(session, period)
+
+
+@router.get("/frontline/frt")
+async def frontline_frt(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await frontline.get_frontline_frt(session, period)
+
+
+@router.get("/frontline/fcr")
+async def frontline_fcr(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await frontline.get_frontline_fcr(session, period)
+
+
+@router.get("/frontline/resolution-ownership")
+async def frontline_resolution_ownership(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
+    return await frontline.get_frontline_resolution_ownership(session, period)
+
+
+@router.get("/quality/anomalies")
+async def quality_anomalies(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await frontline.get_data_anomalies(session, period)
+
+
+@router.get("/quality/uncategorized")
+async def quality_uncategorized(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
+    return await frontline.get_uncategorized_tickets(session, period)
 
 
 @router.get("/meta/sync-status")

@@ -7,6 +7,11 @@ import { formatHours } from "../format";
 const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const ORDINAL_RAMP = ["var(--ord-1)", "var(--ord-2)", "var(--ord-4)", "var(--ord-5)"];
 
+// Below this many resolved tickets, a median is just 1-2 raw values --
+// one old backlog ticket closing alongside a same-day one can swing it by
+// days. Flag it instead of presenting it as a stable trend.
+const LOW_SAMPLE_THRESHOLD = 5;
+
 interface Props {
   data: ResolutionByPriority | null;
   loading: boolean;
@@ -14,12 +19,17 @@ interface Props {
 
 export function ResolutionByPriorityCard({ data, loading }: Props) {
   const byPriority = data?.median_resolution_time_hours_by_priority ?? {};
+  const countByPriority = data?.resolved_ticket_count_by_priority ?? {};
   const items = PRIORITY_ORDER.filter((p) => p in byPriority).map((p, i) => ({
     label: p,
     value: byPriority[p],
     color: ORDINAL_RAMP[i],
     displayValue: formatHours(byPriority[p]),
   }));
+
+  const lowSample = items.filter(
+    (i) => (countByPriority[i.label] ?? 0) < LOW_SAMPLE_THRESHOLD
+  );
 
   const urgentSlowerThanHigh =
     byPriority.URGENT !== undefined &&
@@ -41,6 +51,14 @@ export function ResolutionByPriorityCard({ data, loading }: Props) {
       ) : (
         <>
           <BarList items={items} maxValue={Math.max(...items.map((i) => i.value))} />
+          {lowSample.length > 0 && (
+            <div className="card-sub" style={{ marginTop: 12 }}>
+              Note: {lowSample
+                .map((i) => `${i.label} (${countByPriority[i.label] ?? 0} resolved)`)
+                .join(", ")}{" "}
+              — too few tickets this period for the median to be a reliable signal.
+            </div>
+          )}
           {urgentSlowerThanHigh && (
             <div className="card-sub" style={{ marginTop: 12 }}>
               Note: URGENT resolves slower than HIGH — worth a look, not a chart bug.

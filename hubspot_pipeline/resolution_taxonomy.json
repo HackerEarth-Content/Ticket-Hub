@@ -1,0 +1,16 @@
+{
+  "_comment": "final_resolution -> ownership bucket, verified against this portal's live final_resolution enum options (2026-07-04). Powers the resolution-ownership/dependency-distribution KPI (who actually resolves tickets).",
+  "buckets": {
+    "Support": ["Issue Resolved"],
+    "Engineering": ["Issue Resolved Engineering"],
+    "Backline Engineering": ["Issue Resolved Backline Engineering"],
+    "QA": ["Issue resolved QA"],
+    "Content": ["Issue Resolved Content"],
+    "Programs": ["Issue Resolved Programs"],
+    "Marketing": ["Issue resolved by Marketing"],
+    "Finance": ["Issue resolved by Finance"],
+    "Automation": ["Closed by Automation"],
+    "Passed On": ["Passed to AM", "Passed To Other Team"],
+    "Non-Actionable": ["No Action Taken", "Non Issue Ticket", "No Response"]
+  }
+}

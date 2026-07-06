@@ -1,4 +1,4 @@
-export type Period = "today" | "yesterday" | "week" | "month";
+export type Period = "today" | "yesterday" | "week" | "month" | `custom:${string}:${string}`;
 
 export interface LiveToday {
   open_ticket_count_by_status: Record<string, number>;
@@ -14,8 +14,10 @@ export interface Summary {
   tickets_created_count: number;
   tickets_resolved_count: number;
   median_resolution_time_hours: number | null;
+  mean_resolution_time_hours: number | null;
   tickets_resolved_over_48_hours_count: number;
   sla_breach_percentage: number | null;
+  resolution_within_72_hours_percentage: number | null;
 }
 
 export interface VolumeTrendPoint {
@@ -38,6 +40,7 @@ export interface StageDistribution {
 
 export interface ResolutionByPriority {
   median_resolution_time_hours_by_priority: Record<string, number>;
+  resolved_ticket_count_by_priority: Record<string, number>;
 }
 
 export interface SlaKpis {
@@ -50,6 +53,9 @@ export interface SlaKpis {
 export interface Csat {
   total_response_count: number;
   response_count_by_rating: Record<string, number>;
+  response_count_by_rating_and_channel: Record<string, Record<string, number>>;
+  normalized_csat_percentage: number | null;
+  normalized_csat_percentage_by_channel: Record<string, number | null>;
   rating_scale_confirmed: boolean;
 }
 
@@ -57,14 +63,173 @@ export interface AgentKpi {
   owner_id: string;
   owner_name: string | null;
   ticket_count: number;
+  actionable_count: number;
+  non_actionable_count: number;
+  closed_count: number;
+  still_open_count: number;
+  closure_rate_percentage: number | null;
   median_resolution_time_hours: number | null;
+  mean_resolution_time_hours: number | null;
+  first_response_sla_on_time_count: number;
+  first_response_sla_missed_count: number;
+  first_response_sla_on_time_percentage: number | null;
+  first_contact_resolution_true_count: number;
+  first_contact_resolution_percentage: number | null;
+  backline_escalation_count: number;
+  backline_escalation_percentage: number | null;
+  resolved_by_backline_engineering_count: number;
+  escalated_to_engineering_count: number;
+}
+
+export interface NumericStats {
+  average: number | null;
+  median: number | null;
+  minimum: number | null;
+  maximum: number | null;
+}
+
+export interface AePerformance {
+  backline_engineer: string;
+  tickets_handled_count: number;
+  all_resolved: boolean;
+  path_breakdown: Record<string, number>;
+  ae_stage_time_hours: NumericStats;
+  ae_stage_time_hours_by_path: Record<string, NumericStats>;
+  ticket_resolution_time_hours: NumericStats;
+  ticket_resolution_time_hours_by_path: Record<string, NumericStats>;
+  escalated_to_engineering_count: number;
+  high_priority_ticket_count: number;
+  frontline_owners_supported_count: number;
+  categories_handled_count: number;
+}
+
+export interface BacklineAePerformance {
+  ae_performance: AePerformance[];
+}
+
+export interface Escalation {
+  ticket_id: string;
+  subject: string;
+  owner_name: string | null;
+  backline_engineer: string | null;
+  escalation_path: string;
+  canonical_status: string;
+  final_resolution: string | null;
+  entered_at: string | null;
+  exited_at: string | null;
+  cumulative_time_hours: number | null;
+  live_wait_time_hours: number | null;
+  jira_link: string | null;
+}
+
+export interface BacklineEscalations {
+  escalation_count: number;
+  escalations: Escalation[];
+  truncated: boolean;
+}
+
+export interface StageTimingEntry {
+  label: string;
+  entered_count: number;
+  exited_count: number;
+  still_in_queue_count: number;
+  average_cumulative_time_hours: number | null;
+  minimum_cumulative_time_hours: number | null;
+  maximum_cumulative_time_hours: number | null;
+  max_live_wait_time_hours: number | null;
+}
+
+export interface BacklineStageTiming {
+  stage_timing: Record<string, StageTimingEntry>;
+}
+
+export interface BacklineOverview {
+  total_ticket_count: number;
+  actionable_ticket_count: number;
+  actionable_percentage: number | null;
+  closed_ticket_count: number;
+  closed_percentage_of_actionable: number | null;
+  still_open_ticket_count: number;
+  resolved_by_backline_count: number;
+  resolved_by_backline_percentage_of_actionable: number | null;
+  escalated_to_engineering_count: number;
+  escalated_to_engineering_percentage_of_actionable: number | null;
+  fcr_true_count: number;
+  fcr_percentage_of_actionable: number | null;
+  final_resolution_breakdown: Record<string, number>;
+  final_resolution_percentage_of_closed: Record<string, number | null>;
+}
+
+export interface FrontlineFrtByOwner {
+  owner_id: string;
+  owner_name: string | null;
+  on_time_count: number;
+  missed_count: number;
+  awaiting_reply_overdue_count: number;
+  on_time_percentage: number | null;
+}
+
+export interface FrontlineFrt {
+  sla_threshold_minutes: number;
+  on_time_count: number;
+  missed_count: number;
+  awaiting_reply_overdue_count: number;
+  on_time_percentage: number | null;
+  by_owner: FrontlineFrtByOwner[];
+}
+
+export interface FrontlineFcr {
+  fcr_true_count: number;
+  fcr_false_count: number;
+  first_contact_resolution_percentage: number | null;
+  fcr_resolved_within_24_hours_count: number;
+  fcr_resolved_within_24_hours_percentage: number | null;
+}
+
+export interface ResolutionOwnership {
+  ticket_count_by_resolution_bucket: Record<string, number>;
+  percentage_of_resolved_by_bucket: Record<string, number | null>;
+}
+
+export interface AnomalyTicket {
+  ticket_id: string;
+  subject: string;
+  canonical_status: string;
+  module: string;
+  final_resolution: string | null;
+  owner_name: string | null;
+}
+
+export interface AnomalyGroup {
+  label: string;
+  count: number;
+  tickets: AnomalyTicket[];
+  truncated: boolean;
+}
+
+export interface DataAnomalies {
+  anomaly_count_by_type: Record<string, number>;
+  total_anomaly_count: number;
+  anomalies_by_type: Record<string, AnomalyGroup>;
+}
+
+export interface UncategorizedTicket {
+  ticket_id: string;
+  subject: string;
+  owner_name: string | null;
+  final_resolution: string | null;
+  created_at: string | null;
+}
+
+export interface UncategorizedTickets {
+  uncategorized_count: number;
+  tickets: UncategorizedTicket[];
+  truncated: boolean;
 }
 
 export interface DataQuality {
   priority_inferred_percentage: number | null;
   uncategorized_ticket_percentage: number | null;
-  tickets_pending_over_48_hours_count_by_stage: Record<string, number>;
-  tickets_pending_over_48_hours_total: number;
 }
 
 export interface SyncStatus {
@@ -98,4 +263,13 @@ export interface DashboardData {
   csat: Csat;
   agents: AgentKpi[];
   dataQuality: DataQuality;
+  aePerformance: BacklineAePerformance;
+  escalations: BacklineEscalations;
+  stageTiming: BacklineStageTiming;
+  backlineOverview: BacklineOverview;
+  frt: FrontlineFrt;
+  fcr: FrontlineFcr;
+  resolutionOwnership: ResolutionOwnership;
+  anomalies: DataAnomalies;
+  uncategorized: UncategorizedTickets;
 }

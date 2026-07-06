@@ -1,18 +1,13 @@
-import type { DataQuality, StageDistribution } from "../types";
+import type { StageDistribution } from "../types";
 
 interface Row {
   pipeline: string;
   stage: string;
   count: number;
-  stuckOver48h: number;
 }
 
-function buildRows(
-  stageDistribution: StageDistribution | null,
-  dataQuality: DataQuality | null
-): Row[] {
+function buildRows(stageDistribution: StageDistribution | null): Row[] {
   if (!stageDistribution) return [];
-  const stuckByStage = dataQuality?.tickets_pending_over_48_hours_count_by_stage ?? {};
   const rows: Row[] = [];
 
   for (const [pipeline, stages] of Object.entries(
@@ -23,40 +18,30 @@ function buildRows(
       // "Pending" bucket everywhere else on the dashboard, which is exactly
       // what hides which team is the bottleneck.
       if (!/pending/i.test(stage)) continue;
-      rows.push({ pipeline, stage, count, stuckOver48h: stuckByStage[stage] ?? 0 });
+      rows.push({ pipeline, stage, count });
     }
   }
 
   return rows.sort((a, b) => b.count - a.count);
 }
 
-function stuckChip(n: number) {
-  if (n === 0) return <span className="num">0</span>;
-  const tone = n > 2 ? "serious" : "warning";
-  return (
-    <span className="num">
-      <span className={`chip ${tone}`}>{n}</span>
-    </span>
-  );
-}
-
 interface Props {
   stageDistribution: StageDistribution | null;
-  dataQuality: DataQuality | null;
   loading: boolean;
 }
 
-export function BottleneckTable({ stageDistribution, dataQuality, loading }: Props) {
-  const rows = buildRows(stageDistribution, dataQuality);
+export function BottleneckTable({ stageDistribution, loading }: Props) {
+  const rows = buildRows(stageDistribution);
 
   return (
     <div className="card" style={{ marginBottom: 14 }}>
       <div className="card-head">
         <div>
-          <div className="card-title">Where tickets are stuck, by team</div>
+          <div className="card-title">Tickets by pending stage, by team</div>
           <div className="card-sub">
-            Every "Pending on…" stage, broken out — collapsed into one "Pending" bucket
-            everywhere else on this page
+            Every "Pending on…" stage, broken out for this period — collapsed into one
+            "Pending" bucket everywhere else on this page. For which of these are stuck &gt;48h
+            right now (independent of the date range above), see the live panel up top.
           </div>
         </div>
       </div>
@@ -72,7 +57,6 @@ export function BottleneckTable({ stageDistribution, dataQuality, loading }: Pro
                 <th>Pipeline</th>
                 <th>Stage</th>
                 <th className="num">Tickets</th>
-                <th className="num">Stuck &gt;48h</th>
               </tr>
             </thead>
             <tbody>
@@ -81,7 +65,6 @@ export function BottleneckTable({ stageDistribution, dataQuality, loading }: Pro
                   <td className="pipeline-tag">{r.pipeline}</td>
                   <td className="stage-name">{r.stage}</td>
                   <td className="num">{r.count}</td>
-                  <td>{stuckChip(r.stuckOver48h)}</td>
                 </tr>
               ))}
             </tbody>

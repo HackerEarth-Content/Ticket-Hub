@@ -1,7 +1,10 @@
 """Self-check for the transform logic: run `python hubspot_pipeline/test_transforms.py`."""
 
 from hubspot_pipeline.category_map import resolve_module, split_categories
+from hubspot_pipeline.models import _ms_to_hours, _sla_met, _to_bool
 from hubspot_pipeline.priority import derive_priority
+from hubspot_pipeline.resolution_map import is_actionable, resolve_resolution_bucket
+from hubspot_pipeline.stage_timing import resolve_backline_path
 from hubspot_pipeline.status_map import resolve_status
 
 
@@ -44,9 +47,60 @@ def test_derive_priority():
     assert derive_priority(None, "hello", [], "Open") == ("MEDIUM", True)
 
 
+def test_resolve_resolution_bucket():
+    assert resolve_resolution_bucket("Issue Resolved") == "Support"
+    assert resolve_resolution_bucket("Issue Resolved Engineering") == "Engineering"
+    assert resolve_resolution_bucket("Closed by Automation") == "Automation"
+    assert resolve_resolution_bucket("No Action Taken") == "Non-Actionable"
+    assert resolve_resolution_bucket("Some New Value HubSpot Adds Later") == "Other"
+    assert resolve_resolution_bucket(None) == "Unresolved"
+    assert resolve_resolution_bucket("") == "Unresolved"
+
+
+def test_is_actionable():
+    assert is_actionable(None) is True          # not yet resolved -- still actionable
+    assert is_actionable("Issue Resolved") is True
+    assert is_actionable("No Action Taken") is False
+
+
+def test_resolve_backline_path():
+    assert resolve_backline_path({"backline_ae": {"entered_at": "2026-01-01T00:00:00Z"}}) == "Bug Bounty"
+    assert resolve_backline_path({"be_ae": {"entered_at": "2026-01-01T00:00:00Z"}}) == "Frontline Escalation"
+    assert resolve_backline_path({}) is None
+    assert resolve_backline_path({"backline_ae": {"entered_at": None}}) is None
+
+
+def test_ms_to_hours():
+    assert _ms_to_hours("3600000") == 1.0
+    assert _ms_to_hours("1800000") == 0.5
+    assert _ms_to_hours(None) is None
+    assert _ms_to_hours("") is None
+
+
+def test_to_bool():
+    assert _to_bool("true") is True
+    assert _to_bool("false") is False
+    assert _to_bool(None) is None
+    assert _to_bool("") is None
+
+
+def test_sla_met():
+    # sla_percentage is misleadingly named -- it's actually a 0/1 met-flag.
+    assert _sla_met("1") is True
+    assert _sla_met("0") is False
+    assert _sla_met(None) is None
+    assert _sla_met("") is None
+
+
 if __name__ == "__main__":
     test_split_categories()
     test_resolve_module()
     test_resolve_status()
     test_derive_priority()
+    test_resolve_resolution_bucket()
+    test_is_actionable()
+    test_resolve_backline_path()
+    test_ms_to_hours()
+    test_to_bool()
+    test_sla_met()
     print("All transform checks passed.")

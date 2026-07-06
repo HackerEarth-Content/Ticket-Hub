@@ -1,19 +1,28 @@
 import type {
   AgentKpi,
+  BacklineAePerformance,
+  BacklineEscalations,
+  BacklineOverview,
+  BacklineStageTiming,
   Csat,
+  DataAnomalies,
   DataQuality,
+  FrontlineFcr,
+  FrontlineFrt,
   Granularity,
   LiveToday,
   ModuleDistribution,
   Period,
   Pipelines,
   ResolutionByPriority,
+  ResolutionOwnership,
   SlaKpis,
   StageDistribution,
   StatusDistribution,
   Summary,
   SyncNowResult,
   SyncStatus,
+  UncategorizedTickets,
   VolumeTrendPoint,
 } from "./types";
 
@@ -53,6 +62,21 @@ export const api = {
   csat: (period: Period) => get<Csat>("/kpis/csat", { period }),
   agents: (period: Period) => get<AgentKpi[]>("/kpis/agents", { period }),
   dataQuality: (period: Period) => get<DataQuality>("/kpis/data-quality", { period }),
+  backlineOverview: (period: Period) =>
+    get<BacklineOverview>("/backline/overview", { period }),
+  aePerformance: (period: Period) =>
+    get<BacklineAePerformance>("/backline/ae-performance", { period }),
+  escalations: (period: Period) =>
+    get<BacklineEscalations>("/backline/escalations", { period }),
+  stageTiming: (period: Period) =>
+    get<BacklineStageTiming>("/backline/stage-timing", { period }),
+  frt: (period: Period) => get<FrontlineFrt>("/frontline/frt", { period }),
+  fcr: (period: Period) => get<FrontlineFcr>("/frontline/fcr", { period }),
+  resolutionOwnership: (period: Period) =>
+    get<ResolutionOwnership>("/frontline/resolution-ownership", { period }),
+  anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
+  uncategorized: (period: Period) =>
+    get<UncategorizedTickets>("/quality/uncategorized", { period }),
   syncStatus: () => get<SyncStatus>("/meta/sync-status"),
   syncNow: () => post<SyncNowResult>("/meta/sync-now"),
   pipelines: () => get<Pipelines>("/meta/pipelines"),

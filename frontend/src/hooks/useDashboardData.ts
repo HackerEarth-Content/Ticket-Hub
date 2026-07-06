@@ -9,11 +9,16 @@ interface State {
   granularity: Granularity;
 }
 
-/** today/yesterday span under 24h -- a "day" bucket collapses the whole
- * period into a single point, which renders as a single dot on a line
- * chart. Use hourly buckets for those two periods instead. */
+/** today/yesterday (and a single-day custom range) span under 24h -- a
+ * "day" bucket collapses the whole period into a single point, which
+ * renders as a single dot on a line chart. Use hourly buckets instead. */
 function granularityFor(period: Period): Granularity {
-  return period === "today" || period === "yesterday" ? "hour" : "day";
+  if (period === "today" || period === "yesterday") return "hour";
+  if (period.startsWith("custom:")) {
+    const [, start, end] = period.split(":");
+    return start === end ? "hour" : "day";
+  }
+  return "day";
 }
 
 /** Fetches every period-scoped KPI route together for a given period.
@@ -42,6 +47,15 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
       api.csat(period),
       api.agents(period),
       api.dataQuality(period),
+      api.backlineOverview(period),
+      api.aePerformance(period),
+      api.escalations(period),
+      api.stageTiming(period),
+      api.frt(period),
+      api.fcr(period),
+      api.resolutionOwnership(period),
+      api.anomalies(period),
+      api.uncategorized(period),
     ])
       .then(
         ([
@@ -55,6 +69,15 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
           csat,
           agents,
           dataQuality,
+          backlineOverview,
+          aePerformance,
+          escalations,
+          stageTiming,
+          frt,
+          fcr,
+          resolutionOwnership,
+          anomalies,
+          uncategorized,
         ]) => {
           if (cancelled) return;
           setState({
@@ -71,6 +94,15 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
               csat,
               agents,
               dataQuality,
+              backlineOverview,
+              aePerformance,
+              escalations,
+              stageTiming,
+              frt,
+              fcr,
+              resolutionOwnership,
+              anomalies,
+              uncategorized,
             },
           });
         }

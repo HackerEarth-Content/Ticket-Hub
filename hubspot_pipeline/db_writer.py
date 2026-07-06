@@ -24,13 +24,13 @@ def _parse_dt(value: str | None) -> datetime | None:
 def _to_row(t: DashboardTicket) -> dict:
     row = t.model_dump(exclude={"categories"})
     row["categories"] = list(t.categories)
-    for field in ("created_at", "closed_at", "last_modified_at"):
+    for field in ("created_at", "closed_at", "last_modified_at", "owner_assigned_at"):
         row[field] = _parse_dt(row[field])
     return row
 
 
-# Postgres caps a single query at 65535 bound parameters; Ticket has 21
-# columns, so keep well under 65535/21 per statement.
+# Postgres caps a single query at 65535 bound parameters; Ticket has 34
+# columns, so keep well under 65535/34 per statement.
 _BATCH_SIZE = 1000
 
 

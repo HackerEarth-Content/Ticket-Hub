@@ -1,4 +1,5 @@
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 
 :root {
   color-scheme: light dark;
@@ -36,11 +37,13 @@
   --ink-3: #898781;
   --line: #e3e6ed;
   --ring: rgba(2, 2, 2, 0.08);
-  --shadow: 0 1px 2px rgba(20, 24, 38, 0.04), 0 1px 1px rgba(20, 24, 38, 0.03);
+  --shadow: 0 1px 2px rgba(20, 24, 38, 0.05), 0 6px 16px -8px rgba(20, 24, 38, 0.08);
+  --shadow-hover: 0 2px 4px rgba(20, 24, 38, 0.06), 0 14px 28px -10px rgba(20, 24, 38, 0.14);
 
   --radius: 12px;
   --radius-sm: 8px;
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -67,7 +70,8 @@
     --ink-3: #8a8f98;
     --line: #2c2c33;
     --ring: rgba(255, 255, 255, 0.08);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 20px -8px rgba(0, 0, 0, 0.45);
+    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 32px -10px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -92,7 +96,8 @@
   --ink-3: #8a8f98;
   --line: #2c2c33;
   --ring: rgba(255, 255, 255, 0.08);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 20px -8px rgba(0, 0, 0, 0.45);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 32px -10px rgba(0, 0, 0, 0.55);
 }
 
 :root[data-theme="light"] {
@@ -116,7 +121,8 @@
   --ink-3: #898781;
   --line: #e3e6ed;
   --ring: rgba(2, 2, 2, 0.08);
-  --shadow: 0 1px 2px rgba(20, 24, 38, 0.04), 0 1px 1px rgba(20, 24, 38, 0.03);
+  --shadow: 0 1px 2px rgba(20, 24, 38, 0.05), 0 6px 16px -8px rgba(20, 24, 38, 0.08);
+  --shadow-hover: 0 2px 4px rgba(20, 24, 38, 0.06), 0 14px 28px -10px rgba(20, 24, 38, 0.14);
 }
 
 * {
@@ -148,7 +154,16 @@ body {
   .card,
   .stat,
   button {
-    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
+      transform 0.15s ease;
+  }
+  .card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+  .stat:hover {
+    box-shadow: var(--shadow-hover);
+    border-color: color-mix(in srgb, var(--accent-blue) 30%, var(--line));
   }
 }
 

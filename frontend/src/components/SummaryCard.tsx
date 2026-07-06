@@ -25,7 +25,7 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
       </div>
       <div className="stat-strip">
         {loading || !summary ? (
-          Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
+          Array.from({ length: 8 }).map((_, i) => <StatTileSkeleton key={i} />)
         ) : (
           <>
             <StatTile label="Tickets created" value={formatNumber(summary.tickets_created_count)} />
@@ -33,6 +33,15 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
             <StatTile
               label="Median resolution time"
               value={formatHours(summary.median_resolution_time_hours)}
+            />
+            <StatTile
+              label="Mean resolution time"
+              value={formatHours(summary.mean_resolution_time_hours)}
+            />
+            <StatTile
+              label="Resolved within 3 days"
+              value={formatPercent(summary.resolution_within_72_hours_percentage)}
+              foot="of actionable, resolved"
             />
             <StatTile
               label="Resolved over 48h"

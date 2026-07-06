@@ -1,9 +1,9 @@
 """Async HubSpot API client for the dashboard extraction pipeline.
 
-Pulls tickets across ALL pipelines/stages (not just closed Support Pipeline
-tickets) since the dashboard needs live open/pending counts too. Chunks
-historical pulls into date windows to stay under HubSpot's 10k-result
-search cap (see handoff.md).
+Pulls tickets from Support Pipeline only (pipeline id "0") -- GT Support,
+Customer Success, and Marketing Support are out of scope for this
+dashboard. Chunks historical pulls into date windows to stay under
+HubSpot's 10k-result search cap (see handoff.md).
 """
 
 from __future__ import annotations
@@ -17,8 +17,12 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 from core.config import settings
+from hubspot_pipeline.stage_timing import STAGE_TIMING_STAGES
 
 _BASE = "https://api.hubapi.com"
+
+# The only pipeline this dashboard covers -- see module docstring.
+_SUPPORT_PIPELINE_ID = "0"
 
 # Verified against this portal's live property schema (2026-07-03) --
 # `closedate` doesn't exist here, the real property is `closed_date`.
@@ -27,8 +31,10 @@ TICKET_PROPERTIES = [
     "hs_pipeline",
     "hs_pipeline_stage",
     "hs_ticket_category",
+    "sub_category",
     "hs_ticket_priority",
     "hubspot_owner_id",
+    "hubspot_owner_assigneddate",
     "createdate",
     "closed_date",
     "hs_lastmodifieddate",
@@ -36,12 +42,30 @@ TICKET_PROPERTIES = [
     "hs_time_to_close_sla_status",
     "hs_last_csat_rating",
     "source_type",
+    # Backline/frontline reporting fields, verified live 2026-07-04.
+    "final_resolution",
+    "fcr",
+    "backline_engineer",
+    "jira_link",
+    "sla_percentage",
+    "time_to_close",
+    "time_to_first_agent_reply",
+    "hs_time_to_first_rep_assignment",
+] + [
+    f"hs_v2_{event}_{stage['stage_id']}"
+    for stage in STAGE_TIMING_STAGES.values()
+    for event in ("date_entered", "date_exited", "cumulative_time_in")
 ]
 
-# HubSpot search API caps any single query at 10,000 results; chunk date
-# ranges to stay well under that (observed peak ~500 tickets/day).
+# HubSpot search API caps any single query at 10,000 results (paging via
+# `after` fails once after+limit exceeds that). 20 days is safe for ordinary
+# volume (~500 tickets/day); _fetch_window bisects by time if a window turns
+# out denser than that -- a bulk-modification event can concentrate ~9,000+
+# tickets into under a day (observed during a --full pull, 2026-07-04), which
+# no fixed chunk size can be pre-tuned against.
 _CHUNK_DAYS = 20
 _DAY_MS = 86_400_000
+_SAFE_RESULT_CAP = 9500
 
 
 def _headers() -> dict[str, str]:
@@ -99,7 +123,7 @@ class HubSpotClient:
         return owners
 
     async def fetch_tickets(self, since_ms: int) -> AsyncIterator[dict]:
-        """Yield raw ticket dicts modified since `since_ms`, across all pipelines."""
+        """Yield raw ticket dicts modified since `since_ms`, from Support Pipeline only."""
         now_ms = int(time.time() * 1000)
         chunk_ms = _CHUNK_DAYS * _DAY_MS
 
@@ -118,20 +142,51 @@ class HubSpotClient:
         filters = [
             {"propertyName": "hs_lastmodifieddate", "operator": "GT", "value": str(from_ms)},
             {"propertyName": "hs_lastmodifieddate", "operator": "LTE", "value": str(to_ms)},
+            {"propertyName": "hs_pipeline", "operator": "EQ", "value": _SUPPORT_PIPELINE_ID},
         ]
+        body: dict = {
+            "filterGroups": [{"filters": filters}],
+            "properties": TICKET_PROPERTIES,
+            "limit": settings.TICKET_PAGE_SIZE,
+            "sorts": [{"propertyName": "hs_lastmodifieddate", "direction": "ASCENDING"}],
+        }
 
-        after: str | None = None
-        while True:
-            body: dict = {
-                "filterGroups": [{"filters": filters}],
-                "properties": TICKET_PROPERTIES,
-                "limit": settings.TICKET_PAGE_SIZE,
-                "sorts": [{"propertyName": "hs_lastmodifieddate", "direction": "ASCENDING"}],
-            }
-            if after:
-                body["after"] = after
+        async with session.post(url, headers=_headers(), json=body) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
 
+        # `total` comes back on the very first page -- if this window is too
+        # dense to page through safely, split it by time and recurse instead
+        # of gambling on a fixed chunk size (see _SAFE_RESULT_CAP comment).
+        if data.get("total", 0) > _SAFE_RESULT_CAP and to_ms - from_ms > 1_000:
+            mid_ms = from_ms + (to_ms - from_ms) // 2
+            async for ticket in self._fetch_window(session, from_ms, mid_ms):
+                yield ticket
+            async for ticket in self._fetch_window(session, mid_ms, to_ms):
+                yield ticket
+            return
+
+        for raw in data.get("results", []):
+            yield raw
+
+        after = data.get("paging", {}).get("next", {}).get("after")
+        while after:
+            body["after"] = after
             async with session.post(url, headers=_headers(), json=body) as resp:
+                # A cluster of tickets can share the same hs_lastmodifieddate
+                # down to the millisecond (e.g. a bulk backend job stamping
+                # them all at once) -- bisecting by time can never separate
+                # those, so a 1,000+-ticket instant can still blow through
+                # HubSpot's 10,000-result pagination cap. Stop paginating
+                # this window instead of failing the whole historical pull;
+                # the dropped tail is a known, logged gap, not silent loss.
+                if resp.status == 400:
+                    logger.warning(
+                        "Pagination cap hit fetching %s..%s (window couldn't be split further, "
+                        "likely a timestamp-clustered bulk update) -- stopping this window early",
+                        from_ms, to_ms,
+                    )
+                    return
                 resp.raise_for_status()
                 data = await resp.json()
 
@@ -139,5 +194,3 @@ class HubSpotClient:
                 yield raw
 
             after = data.get("paging", {}).get("next", {}).get("after")
-            if not after:
-                break

@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical status per pipeline stage_id. Buckets: New, Open, Pending, Closing, Resolved. Support Pipeline confirmed against live data (2026-07-03). GT Support / Customer Success / Marketing Support are best-guess from stage labels only (near-zero sample volume) and need sign-off from the portal owner -- see handoff.md open question #5.",
+  "_comment": "Canonical status per pipeline stage_id. Buckets: New, Open, Pending, Closing, Resolved. Support Pipeline confirmed against live data (2026-07-03). GT Support / Customer Success / Marketing Support confirmed 2026-07-04 by cross-checking every stage_id/label pair directly against the live HubSpot pipelines API (GET /crm/v3/pipelines/tickets) -- each stage's bucket assignment follows the same New/Open/Pending/Resolved semantics already established for Support Pipeline. Volume is low (8/177/52 tickets respectively) but the mapping itself is no longer a guess.",
   "pipelines": {
     "0": {
       "_label": "Support Pipeline",
@@ -28,7 +28,7 @@
     },
     "913510303": {
       "_label": "GT Support Pipeline",
-      "_confirmed": false,
+      "_confirmed": true,
       "stages": {
         "1388840362": "New",
         "1388840363": "Open",
@@ -39,7 +39,7 @@
     },
     "38932318": {
       "_label": "Customer Success",
-      "_confirmed": false,
+      "_confirmed": true,
       "stages": {
         "82999414": "New",
         "82949043": "Open",
@@ -50,7 +50,7 @@
     },
     "23707277": {
       "_label": "Marketing Support",
-      "_confirmed": false,
+      "_confirmed": true,
       "stages": {
         "55787115": "New",
         "55793779": "Open",
