@@ -1,5 +1,5 @@
 import type { BacklineEscalations } from "../types";
-import { formatHours } from "../format";
+import { formatHours, hubspotTicketUrl } from "../format";
 
 interface Props {
   data: BacklineEscalations | null;
@@ -52,7 +52,10 @@ export function EscalationsTable({ data, loading }: Props) {
               {rows.map((e) => (
                 <tr key={e.ticket_id}>
                   <td className="name-cell" title={e.subject}>
-                    {e.subject || e.ticket_id}
+                    <a href={hubspotTicketUrl(e.ticket_id)} target="_blank" rel="noopener noreferrer">
+                      {e.subject || e.ticket_id}
+                    </a>
+                    <div className="card-sub">#{e.ticket_id}</div>
                   </td>
                   <td>{e.owner_name ?? "—"}</td>
                   <td>{e.backline_engineer ?? "—"}</td>

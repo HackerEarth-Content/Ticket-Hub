@@ -21,10 +21,12 @@ function granularityFor(period: Period): Granularity {
   return "day";
 }
 
-/** Fetches every period-scoped KPI route together for a given period.
- * `refreshKey` is an escape hatch to force a refetch (e.g. after a manual
- * "sync now") without waiting for `period` to change. */
-export function useDashboardData(period: Period, refreshKey = 0): State {
+/** Fetches every period-scoped KPI route for a given period. Split into a
+ * public group (always fetched, a real failure here is a genuine outage)
+ * and a private group (per-agent data, requires sign-in) -- the private
+ * group is only attempted when signed in, and never fails the public one:
+ * a signed-out visitor should still see the org-wide dashboard. */
+export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey = 0): State {
   const [state, setState] = useState<Omit<State, "granularity">>({
     loading: true,
     error: null,
@@ -36,48 +38,63 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
     let cancelled = false;
     setState((s) => ({ ...s, loading: true, error: null }));
 
-    Promise.all([
+    const publicData = Promise.all([
       api.summary(period),
       api.volumeTrend(period, granularity),
       api.moduleDistribution(period),
       api.statusDistribution(period),
       api.stageDistribution(period),
+      api.sourceDistribution(period),
       api.resolutionByPriority(period),
       api.slaKpis(period),
       api.csat(period),
-      api.agents(period),
       api.dataQuality(period),
       api.backlineOverview(period),
-      api.aePerformance(period),
-      api.escalations(period),
       api.stageTiming(period),
       api.frt(period),
       api.fcr(period),
       api.resolutionOwnership(period),
-      api.anomalies(period),
-      api.uncategorized(period),
-    ])
+      api.customerVolume(period),
+      api.customerStatus(period),
+      api.customerDetails(period),
+    ]);
+
+    const privateData: Promise<
+      [DashboardData["agents"], DashboardData["aePerformance"], DashboardData["escalations"], DashboardData["anomalies"], DashboardData["uncategorized"]]
+    > = isLoggedIn
+      ? Promise.all([
+          api.agents(period),
+          api.aePerformance(period),
+          api.escalations(period),
+          api.anomalies(period),
+          api.uncategorized(period),
+        ]).catch(() => [[], null, null, null, null])
+      : Promise.resolve([[], null, null, null, null]);
+
+    Promise.all([publicData, privateData])
       .then(
         ([
-          summary,
-          volumeTrend,
-          moduleDistribution,
-          statusDistribution,
-          stageDistribution,
-          resolutionByPriority,
-          sla,
-          csat,
-          agents,
-          dataQuality,
-          backlineOverview,
-          aePerformance,
-          escalations,
-          stageTiming,
-          frt,
-          fcr,
-          resolutionOwnership,
-          anomalies,
-          uncategorized,
+          [
+            summary,
+            volumeTrend,
+            moduleDistribution,
+            statusDistribution,
+            stageDistribution,
+            sourceDistribution,
+            resolutionByPriority,
+            sla,
+            csat,
+            dataQuality,
+            backlineOverview,
+            stageTiming,
+            frt,
+            fcr,
+            resolutionOwnership,
+            customerVolume,
+            customerStatus,
+            customerDetails,
+          ],
+          [agents, aePerformance, escalations, anomalies, uncategorized],
         ]) => {
           if (cancelled) return;
           setState({
@@ -89,6 +106,7 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
               moduleDistribution,
               statusDistribution,
               stageDistribution,
+              sourceDistribution,
               resolutionByPriority,
               sla,
               csat,
@@ -103,6 +121,9 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
               resolutionOwnership,
               anomalies,
               uncategorized,
+              customerVolume,
+              customerStatus,
+              customerDetails,
             },
           });
         }
@@ -115,7 +136,7 @@ export function useDashboardData(period: Period, refreshKey = 0): State {
     return () => {
       cancelled = true;
     };
-  }, [period, granularity, refreshKey]);
+  }, [period, granularity, refreshKey, isLoggedIn]);
 
   return { ...state, granularity };
 }

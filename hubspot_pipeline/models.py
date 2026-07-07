@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from hubspot_pipeline.category_map import resolve_module, split_categories
+from hubspot_pipeline.customer_map import resolve_customer_name
 from hubspot_pipeline.priority import derive_priority
 from hubspot_pipeline.resolution_map import is_actionable, resolve_resolution_bucket
 from hubspot_pipeline.stage_timing import STAGE_TIMING_STAGES, resolve_backline_path
@@ -64,6 +65,7 @@ class DashboardTicket(BaseModel):
     primary_category: str | None
     module: str
     sub_category: str | None
+    customer_name: str | None
 
     priority: str | None          # real hs_ticket_priority, None if blank
     derived_priority: str
@@ -143,6 +145,7 @@ class DashboardTicket(BaseModel):
             primary_category=categories[0] if categories else None,
             module=resolve_module(categories),
             sub_category=props.get("sub_category") or None,
+            customer_name=resolve_customer_name(props),
             priority=raw_priority,
             derived_priority=derived,
             priority_inferred=inferred,

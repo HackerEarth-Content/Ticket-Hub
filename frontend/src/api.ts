@@ -5,6 +5,10 @@ import type {
   BacklineOverview,
   BacklineStageTiming,
   Csat,
+  CurrentUser,
+  CustomerDetails,
+  CustomerStatusBreakdown,
+  CustomerVolume,
   DataAnomalies,
   DataQuality,
   FrontlineFcr,
@@ -17,6 +21,7 @@ import type {
   ResolutionByPriority,
   ResolutionOwnership,
   SlaKpis,
+  SourceDistribution,
   StageDistribution,
   StatusDistribution,
   Summary,
@@ -28,11 +33,17 @@ import type {
 
 const BASE = "/dashboard";
 
+class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
 async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${BASE}${path}${qs ? `?${qs}` : ""}`);
   if (!res.ok) {
-    throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
+    throw new ApiError(`GET ${path} failed: ${res.status} ${res.statusText}`, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -56,6 +67,8 @@ export const api = {
     get<StatusDistribution>("/distribution/status", { period }),
   stageDistribution: (period: Period) =>
     get<StageDistribution>("/distribution/stage", { period }),
+  sourceDistribution: (period: Period) =>
+    get<SourceDistribution>("/distribution/source", { period }),
   resolutionByPriority: (period: Period) =>
     get<ResolutionByPriority>("/kpis/mttr", { period }),
   slaKpis: (period: Period) => get<SlaKpis>("/kpis/sla", { period }),
@@ -77,7 +90,22 @@ export const api = {
   anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
   uncategorized: (period: Period) =>
     get<UncategorizedTickets>("/quality/uncategorized", { period }),
+  customerVolume: (period: Period) => get<CustomerVolume>("/customers/volume", { period }),
+  customerStatus: (period: Period) =>
+    get<CustomerStatusBreakdown>("/customers/status", { period }),
+  customerDetails: (period: Period) => get<CustomerDetails>("/customers/details", { period }),
   syncStatus: () => get<SyncStatus>("/meta/sync-status"),
   syncNow: () => post<SyncNowResult>("/meta/sync-now"),
   pipelines: () => get<Pipelines>("/meta/pipelines"),
+};
+
+export { ApiError };
+
+/** Separate from `api` -- these hit /api/auth and /api/users, not /dashboard. */
+export const authApi = {
+  me: async (): Promise<CurrentUser | null> => {
+    const res = await fetch("/api/users/me");
+    return res.ok ? ((await res.json()) as CurrentUser) : null;
+  },
+  logout: () => fetch("/api/auth/logout", { method: "POST" }),
 };

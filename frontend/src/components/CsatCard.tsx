@@ -7,12 +7,20 @@ interface Props {
   loading: boolean;
 }
 
+// ponytail: assumes the reference report's 0/1/2 scale, same caveat as
+// _normalized_csat_percentage in dashboard/utils.py -- unconfirmed with HubSpot.
+const RATING_LABELS: Record<string, string> = {
+  "0": "Dissatisfied",
+  "1": "Neutral",
+  "2": "Satisfied",
+};
+
 export function CsatCard({ csat, loading }: Props) {
   const items = csat
     ? Object.entries(csat.response_count_by_rating)
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([rating, count]) => ({
-          label: `Rating ${rating}`,
+          label: RATING_LABELS[rating] ?? `Rating ${rating}`,
           value: count,
           color: "var(--ink-3)",
         }))

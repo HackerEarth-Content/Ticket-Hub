@@ -51,6 +51,10 @@ TICKET_PROPERTIES = [
     "time_to_close",
     "time_to_first_agent_reply",
     "hs_time_to_first_rep_assignment",
+    # Customer/account name -- verified live 2026-07-06, see customer_map.py.
+    "blackops_account_name",
+    "other_blackops_account_name",
+    "hs_primary_company_name",
 ] + [
     f"hs_v2_{event}_{stage['stage_id']}"
     for stage in STAGE_TIMING_STAGES.values()

@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
-from dashboard import backline, frontline, utils
+from core.users import current_active_user, current_active_user_optional
+from dashboard import backline, customers, frontline, utils
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -40,6 +41,11 @@ async def distribution_module(
     period: str = PeriodParam, session: AsyncSession = Depends(get_session)
 ):
     return await utils.get_module_distribution(session, period)
+
+
+@router.get("/distribution/source")
+async def distribution_source(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await utils.get_source_distribution(session, period)
 
 
 @router.get("/distribution/status")
@@ -78,7 +84,11 @@ async def kpis_csat(period: str = PeriodParam, session: AsyncSession = Depends(g
 
 
 @router.get("/kpis/agents")
-async def kpis_agents(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def kpis_agents(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
     return await utils.get_agent_kpis(session, period)
 
 
@@ -96,13 +106,19 @@ async def backline_overview(period: str = PeriodParam, session: AsyncSession = D
 
 @router.get("/backline/ae-performance")
 async def backline_ae_performance(
-    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
 ):
     return await backline.get_backline_ae_performance(session, period)
 
 
 @router.get("/backline/escalations")
-async def backline_escalations(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def backline_escalations(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
     return await backline.get_backline_escalations(session, period)
 
 
@@ -114,8 +130,17 @@ async def backline_stage_timing(
 
 
 @router.get("/frontline/frt")
-async def frontline_frt(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
-    return await frontline.get_frontline_frt(session, period)
+async def frontline_frt(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user_optional),
+):
+    """`by_owner` breaks out named agents -- only included for logged-in
+    team members, not the org-wide aggregate consumers of this endpoint."""
+    result = await frontline.get_frontline_frt(session, period)
+    if user is None:
+        result.pop("by_owner", None)
+    return result
 
 
 @router.get("/frontline/fcr")
@@ -131,15 +156,36 @@ async def frontline_resolution_ownership(
 
 
 @router.get("/quality/anomalies")
-async def quality_anomalies(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def quality_anomalies(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
     return await frontline.get_data_anomalies(session, period)
 
 
 @router.get("/quality/uncategorized")
 async def quality_uncategorized(
-    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
 ):
     return await frontline.get_uncategorized_tickets(session, period)
+
+
+@router.get("/customers/volume")
+async def customers_volume(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await customers.get_customer_ticket_volume(session, period)
+
+
+@router.get("/customers/status")
+async def customers_status(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await customers.get_customer_status_breakdown(session, period)
+
+
+@router.get("/customers/details")
+async def customers_details(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await customers.get_customer_details(session, period)
 
 
 @router.get("/meta/sync-status")

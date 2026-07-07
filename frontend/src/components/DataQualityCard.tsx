@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DataQuality, UncategorizedTickets } from "../types";
-import { formatPercent } from "../format";
+import { formatPercent, hubspotTicketUrl } from "../format";
 import { StatTile, StatTileSkeleton } from "./StatTile";
 
 interface Props {
@@ -62,7 +62,10 @@ export function DataQualityCard({ dataQuality, uncategorized, loading }: Props) 
                   {uncategorized.tickets.map((t) => (
                     <tr key={t.ticket_id}>
                       <td className="name-cell" title={t.subject}>
-                        {t.subject || t.ticket_id}
+                        <a href={hubspotTicketUrl(t.ticket_id)} target="_blank" rel="noopener noreferrer">
+                          {t.subject || t.ticket_id}
+                        </a>
+                        <div className="card-sub">#{t.ticket_id}</div>
                       </td>
                       <td>{t.owner_name ?? "—"}</td>
                       <td>{t.final_resolution ?? "—"}</td>

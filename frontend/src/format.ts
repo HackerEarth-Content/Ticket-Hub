@@ -24,6 +24,15 @@ export function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+// ponytail: portal ID is static per-portal, not worth a config layer.
+const HUBSPOT_PORTAL_ID = 2586902;
+
+/** Direct link to a ticket's record in HubSpot -- 0-5 is HubSpot's object
+ * type ID for tickets, verified against this portal's own API response. */
+export function hubspotTicketUrl(ticketId: string): string {
+  return `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-5/${ticketId}`;
+}
+
 /** Absolute time in IST (Asia/Kolkata) -- the team's timezone -- regardless
  * of the viewer's browser locale/timezone. */
 export function formatIstTime(iso: string | null): string {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DataAnomalies } from "../types";
-import { formatNumber } from "../format";
+import { formatNumber, hubspotTicketUrl } from "../format";
 
 interface Props {
   data: DataAnomalies | null;
@@ -65,7 +65,10 @@ export function AnomaliesCard({ data, loading }: Props) {
                       {group.tickets.map((t) => (
                         <tr key={t.ticket_id}>
                           <td className="name-cell" title={t.subject}>
-                            {t.subject || t.ticket_id}
+                            <a href={hubspotTicketUrl(t.ticket_id)} target="_blank" rel="noopener noreferrer">
+                              {t.subject || t.ticket_id}
+                            </a>
+                            <div className="card-sub">#{t.ticket_id}</div>
                           </td>
                           <td>{t.canonical_status}</td>
                           <td>{t.module}</td>

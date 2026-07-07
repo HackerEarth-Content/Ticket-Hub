@@ -303,6 +303,21 @@ async def get_module_distribution(session: AsyncSession, period: str) -> dict:
     return {"ticket_count_by_module": dict(rows.all())}
 
 
+async def get_source_distribution(session: AsyncSession, period: str) -> dict:
+    """Channel mix (source_type) across all tickets in the period -- e.g.
+    EMAIL vs CHAT vs Slack. General/org-wide, not scoped to any team or
+    customer."""
+    period_start, period_end = resolve_period(period)
+    rows = await session.execute(
+        select(Ticket.source_type, func.count())
+        .where(Ticket.created_at.between(period_start, period_end))
+        .group_by(Ticket.source_type)
+        .order_by(func.count().desc())
+    )
+    by_source = {(source or "Unknown"): count for source, count in rows.all()}
+    return {"by_source": by_source, "total_ticket_count": sum(by_source.values())}
+
+
 async def get_status_distribution(
     session: AsyncSession, period: str, pipeline_id: str | None
 ) -> dict:

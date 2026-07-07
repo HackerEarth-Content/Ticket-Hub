@@ -56,6 +56,7 @@ class Ticket(Base):
     primary_category: Mapped[str | None]
     module: Mapped[str]
     sub_category: Mapped[str | None]
+    customer_name: Mapped[str | None] = mapped_column(index=True)
 
     priority: Mapped[str | None]
     derived_priority: Mapped[str]

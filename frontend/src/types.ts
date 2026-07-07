@@ -1,5 +1,11 @@
 export type Period = "today" | "yesterday" | "week" | "month" | `custom:${string}:${string}`;
 
+export interface CurrentUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
 export interface LiveToday {
   open_ticket_count_by_status: Record<string, number>;
   resolved_today_count: number;
@@ -252,6 +258,54 @@ export interface Pipelines {
   pipelines: PipelineInfo[];
 }
 
+export interface CustomerVolumeEntry {
+  customer_name: string;
+  ticket_count: number;
+}
+
+export interface CustomerVolume {
+  top_customers: CustomerVolumeEntry[];
+  other_identified_customer_count: number;
+  other_identified_ticket_count: number;
+  identified_customer_count: number;
+  identified_ticket_count: number;
+  no_account_ticket_count: number;
+  total_ticket_count: number;
+}
+
+export interface CustomerStatusEntry {
+  customer_name: string;
+  status_counts: Record<string, number>;
+  stage_counts: Record<string, number>;
+}
+
+export interface CustomerStatusBreakdown {
+  customers: CustomerStatusEntry[];
+}
+
+export interface SourceDistribution {
+  by_source: Record<string, number>;
+  total_ticket_count: number;
+}
+
+export interface CustomerDetailsEntry {
+  customer_name: string;
+  resolution_bucket_counts: Record<string, number>;
+  priority_counts: Record<string, number>;
+  sla_met_count: number;
+  sla_breached_count: number;
+  median_resolution_time_hours: number | null;
+  median_first_response_hours: number | null;
+  escalated_count: number;
+  escalated_percentage: number | null;
+  open_backlog_count: number;
+  normalized_csat_percentage: number | null;
+}
+
+export interface CustomerDetails {
+  customers: CustomerDetailsEntry[];
+}
+
 export interface DashboardData {
   summary: Summary;
   volumeTrend: VolumeTrendPoint[];
@@ -261,15 +315,21 @@ export interface DashboardData {
   resolutionByPriority: ResolutionByPriority;
   sla: SlaKpis;
   csat: Csat;
+  // Team-only (require sign-in) -- null when signed out, not just "not yet loaded".
   agents: AgentKpi[];
+  aePerformance: BacklineAePerformance | null;
+  escalations: BacklineEscalations | null;
+  anomalies: DataAnomalies | null;
+  uncategorized: UncategorizedTickets | null;
+
   dataQuality: DataQuality;
-  aePerformance: BacklineAePerformance;
-  escalations: BacklineEscalations;
   stageTiming: BacklineStageTiming;
   backlineOverview: BacklineOverview;
   frt: FrontlineFrt;
   fcr: FrontlineFcr;
   resolutionOwnership: ResolutionOwnership;
-  anomalies: DataAnomalies;
-  uncategorized: UncategorizedTickets;
+  customerVolume: CustomerVolume;
+  customerStatus: CustomerStatusBreakdown;
+  customerDetails: CustomerDetails;
+  sourceDistribution: SourceDistribution;
 }
