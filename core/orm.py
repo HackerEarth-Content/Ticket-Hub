@@ -55,6 +55,7 @@ class Ticket(Base):
     categories: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     primary_category: Mapped[str | None]
     module: Mapped[str]
+    hubspot_module: Mapped[str | None]
     sub_category: Mapped[str | None]
     customer_name: Mapped[str | None] = mapped_column(index=True)
 
@@ -74,7 +75,6 @@ class Ticket(Base):
     sla_first_response_status: Mapped[str | None]
     sla_close_status: Mapped[str | None]
     sla_met: Mapped[bool | None]
-    csat_rating: Mapped[str | None]
 
     final_resolution: Mapped[str | None]
     resolution_bucket: Mapped[str]
@@ -91,6 +91,28 @@ class Ticket(Base):
     # stage_key -> {entered_at, exited_at, cumulative_hours}, see
     # hubspot_pipeline.stage_timing.STAGE_TIMING_STAGES.
     stage_timings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
+class CsatResponse(Base):
+    """An email CSAT survey response (HubSpot Feedback Submissions, survey
+    "Customer Satisfaction Survey - Support") -- replaces the old
+    Ticket.csat_rating (hs_last_csat_rating) chat rollup, which had an
+    unconfirmed rating scale. This survey's scale is confirmed via
+    hs_response_group: 0=Detractor, 1=Passive, 2=Promoter.
+
+    ticket_id/owner_id/owner_name are a best-effort match, not a HubSpot
+    association -- see hubspot_pipeline.pipeline._match_ticket for why.
+    """
+
+    __tablename__ = "csat_responses"
+
+    submission_id: Mapped[str] = mapped_column(primary_key=True)
+    rating: Mapped[int]
+    submitted_at: Mapped[datetime] = mapped_column(index=True)
+    contact_id: Mapped[str | None]
+    ticket_id: Mapped[str | None] = mapped_column(index=True)
+    owner_id: Mapped[str | None]
+    owner_name: Mapped[str | None]
 
 
 class SyncCursor(Base):

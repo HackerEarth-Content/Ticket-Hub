@@ -64,6 +64,7 @@ class DashboardTicket(BaseModel):
     categories: list[str]
     primary_category: str | None
     module: str
+    hubspot_module: str | None  # HubSpot's own "module" dropdown -- see client.py's comment
     sub_category: str | None
     customer_name: str | None
 
@@ -83,7 +84,6 @@ class DashboardTicket(BaseModel):
     sla_first_response_status: str | None
     sla_close_status: str | None
     sla_met: bool | None
-    csat_rating: str | None
 
     final_resolution: str | None
     resolution_bucket: str
@@ -144,6 +144,7 @@ class DashboardTicket(BaseModel):
             categories=categories,
             primary_category=categories[0] if categories else None,
             module=resolve_module(categories),
+            hubspot_module=props.get("module") or None,
             sub_category=props.get("sub_category") or None,
             customer_name=resolve_customer_name(props),
             priority=raw_priority,
@@ -163,7 +164,6 @@ class DashboardTicket(BaseModel):
                 props.get("hs_time_to_close_sla_status") or ""
             ),
             sla_met=_sla_met(props.get("sla_percentage")),
-            csat_rating=props.get("hs_last_csat_rating") or None,
             final_resolution=final_resolution,
             resolution_bucket=resolve_resolution_bucket(final_resolution),
             actionable=is_actionable(final_resolution),
@@ -179,4 +179,41 @@ class DashboardTicket(BaseModel):
                 props.get("hs_time_to_first_rep_assignment")
             ),
             stage_timings=stage_timings,
+        )
+
+
+class CsatSubmission(BaseModel):
+    """An email CSAT survey response (HubSpot Feedback Submissions, survey
+    "Customer Satisfaction Survey - Support") normalized for storage.
+
+    ticket_id/owner_id/owner_name are filled in by pipeline._match_ticket,
+    not by HubSpot -- the object only associates to the contact who
+    responded, never to a ticket."""
+
+    submission_id: str
+    rating: int  # 0=Detractor, 1=Passive, 2=Promoter -- confirmed via hs_response_group
+    submitted_at: str
+    contact_id: str | None
+    ticket_id: str | None
+    owner_id: str | None
+    owner_name: str | None
+
+    @classmethod
+    def from_raw(
+        cls,
+        raw: dict[str, Any],
+        contact_id: str | None,
+        ticket_id: str | None,
+        owner_id: str | None,
+        owner_name: str | None,
+    ) -> "CsatSubmission":
+        props = raw.get("properties", {})
+        return cls(
+            submission_id=raw["id"],
+            rating=int(props["hs_value"]),
+            submitted_at=props["hs_submission_timestamp"],
+            contact_id=contact_id,
+            ticket_id=ticket_id,
+            owner_id=owner_id,
+            owner_name=owner_name,
         )

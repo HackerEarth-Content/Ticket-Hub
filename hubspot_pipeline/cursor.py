@@ -11,20 +11,21 @@ from sqlalchemy.dialects.postgresql import insert
 from core.database import db_manager
 from core.orm import SyncCursor
 
-_KEY = "hubspot_tickets"
+TICKETS_KEY = "hubspot_tickets"
+CSAT_KEY = "hubspot_csat"
 
 
-async def get_cursor() -> datetime | None:
+async def get_cursor(key: str = TICKETS_KEY) -> datetime | None:
     session_factory = db_manager.session_factory()
     async with session_factory() as session:
-        row = await session.get(SyncCursor, _KEY)
+        row = await session.get(SyncCursor, key)
         return row.last_synced_at if row else None
 
 
-async def set_cursor(value: datetime) -> None:
+async def set_cursor(value: datetime, key: str = TICKETS_KEY) -> None:
     session_factory = db_manager.session_factory()
     async with session_factory() as session:
-        stmt = insert(SyncCursor).values(key=_KEY, last_synced_at=value)
+        stmt = insert(SyncCursor).values(key=key, last_synced_at=value)
         stmt = stmt.on_conflict_do_update(
             index_elements=["key"], set_={"last_synced_at": stmt.excluded.last_synced_at}
         )

@@ -1,7 +1,10 @@
 """Self-check for the transform logic: run `python hubspot_pipeline/test_transforms.py`."""
 
+from datetime import datetime, timedelta, timezone
+
 from hubspot_pipeline.category_map import resolve_module, split_categories
 from hubspot_pipeline.models import _ms_to_hours, _sla_met, _to_bool
+from hubspot_pipeline.pipeline import _match_ticket
 from hubspot_pipeline.priority import derive_priority
 from hubspot_pipeline.resolution_map import is_actionable, resolve_resolution_bucket
 from hubspot_pipeline.stage_timing import resolve_backline_path
@@ -92,6 +95,20 @@ def test_sla_met():
     assert _sla_met("") is None
 
 
+def test_match_ticket():
+    submitted_at = datetime(2026, 7, 6, 12, 0, tzinfo=timezone.utc)
+    ticket_info = {
+        "t1": (submitted_at - timedelta(days=5), "owner1", "Alice"),
+        "t2": (submitted_at - timedelta(hours=2), "owner2", "Bob"),  # closest
+        "t3": (None, "owner3", "Carol"),  # no closed_at -- never picked
+    }
+    assert _match_ticket(submitted_at, ["t1", "t2", "t3"], ticket_info) == ("t2", "owner2", "Bob")
+    # No candidates at all -- unmatched.
+    assert _match_ticket(submitted_at, [], ticket_info) == (None, None, None)
+    # Only a no-closed_at candidate -- still unmatched.
+    assert _match_ticket(submitted_at, ["t3"], ticket_info) == (None, None, None)
+
+
 if __name__ == "__main__":
     test_split_categories()
     test_resolve_module()
@@ -103,4 +120,5 @@ if __name__ == "__main__":
     test_ms_to_hours()
     test_to_bool()
     test_sla_met()
+    test_match_ticket()
     print("All transform checks passed.")

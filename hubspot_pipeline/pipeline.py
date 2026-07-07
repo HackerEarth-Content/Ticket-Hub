@@ -13,12 +13,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hubspot_pipeline import cursor as cursor_store
+from hubspot_pipeline import db_writer
 from hubspot_pipeline.client import HubSpotClient
-from hubspot_pipeline.db_writer import upsert_tickets
-from hubspot_pipeline.models import DashboardTicket
+from hubspot_pipeline.db_writer import parse_iso, upsert_tickets
+from hubspot_pipeline.models import CsatSubmission, DashboardTicket
 
 # First incremental run has no cursor yet; seed it with this lookback.
 _DEFAULT_LOOKBACK_DAYS = 30
+_CSAT_DEFAULT_LOOKBACK_DAYS = 30
 
 
 async def extract(since_ms: int) -> list[DashboardTicket]:
@@ -52,6 +54,84 @@ async def run_incremental() -> dict:
     await cursor_store.set_cursor(started_at)
 
     return summarize(tickets)
+
+
+def _match_ticket(
+    submitted_at: datetime,
+    candidate_ticket_ids: list[str],
+    ticket_info: dict[str, tuple],
+) -> tuple[str | None, str | None, str | None]:
+    """Picks the candidate ticket closed nearest the survey's submission
+    time -- the best available proxy for "which ticket this CSAT response is
+    about", since Feedback Submissions only associate to the contact (see
+    client.fetch_contact_tickets). Wrong when a contact has multiple tickets
+    closed close together; upgrade path is a direct submission-to-ticket
+    association if HubSpot's survey automation ever adds one."""
+    # Ticket.closed_at comes back tz-naive (column has no timezone, like every
+    # other timestamp on Ticket) -- strip tzinfo from both sides to compare.
+    if submitted_at.tzinfo is not None:
+        submitted_at = submitted_at.replace(tzinfo=None)
+
+    best_id = best_owner_id = best_owner_name = None
+    best_diff = None
+    for ticket_id in candidate_ticket_ids:
+        closed_at, owner_id, owner_name = ticket_info.get(ticket_id, (None, None, None))
+        if closed_at is None:
+            continue
+        if closed_at.tzinfo is not None:
+            closed_at = closed_at.replace(tzinfo=None)
+        diff = abs((submitted_at - closed_at).total_seconds())
+        if best_diff is None or diff < best_diff:
+            best_id, best_owner_id, best_owner_name, best_diff = ticket_id, owner_id, owner_name, diff
+    return best_id, best_owner_id, best_owner_name
+
+
+async def extract_csat(since_ms: int) -> list[CsatSubmission]:
+    """Fetch and match Support CSAT survey responses since `since_ms`.
+    Ticket matching reads from our own DB (via db_writer), so tickets should
+    be synced before this runs in the same pass."""
+    client = HubSpotClient()
+    submissions: list[CsatSubmission] = []
+    async for page in client.fetch_csat_submissions(since_ms):
+        submission_ids = [r["id"] for r in page]
+        contact_by_submission = await client.fetch_submission_contacts(submission_ids)
+        contact_ids = list(set(contact_by_submission.values()))
+        tickets_by_contact = await client.fetch_contact_tickets(contact_ids)
+        candidate_ticket_ids = list({tid for tids in tickets_by_contact.values() for tid in tids})
+        ticket_info = await db_writer.fetch_ticket_owner_info(candidate_ticket_ids)
+
+        for raw in page:
+            submission_id = raw["id"]
+            contact_id = contact_by_submission.get(submission_id)
+            candidates = tickets_by_contact.get(contact_id, []) if contact_id else []
+            submitted_at = parse_iso(raw["properties"]["hs_submission_timestamp"])
+            ticket_id, owner_id, owner_name = _match_ticket(submitted_at, candidates, ticket_info)
+            submissions.append(
+                CsatSubmission.from_raw(raw, contact_id, ticket_id, owner_id, owner_name)
+            )
+    return submissions
+
+
+async def run_csat_incremental() -> dict:
+    """Sync CSAT responses since the last cursor (or a default lookback on
+    first run). Meant to run right after run_incremental, since matching
+    needs the tickets it just synced."""
+    since = await cursor_store.get_cursor(cursor_store.CSAT_KEY)
+    since_ms = (
+        int(since.timestamp() * 1000)
+        if since
+        else int((time.time() - _CSAT_DEFAULT_LOOKBACK_DAYS * 86400) * 1000)
+    )
+    started_at = datetime.now(timezone.utc)
+
+    submissions = await extract_csat(since_ms)
+    await db_writer.upsert_csat_responses(submissions)
+    await cursor_store.set_cursor(started_at, cursor_store.CSAT_KEY)
+
+    return {
+        "total": len(submissions),
+        "matched_to_ticket_count": sum(1 for s in submissions if s.ticket_id),
+    }
 
 
 def summarize(tickets: list[DashboardTicket]) -> dict:

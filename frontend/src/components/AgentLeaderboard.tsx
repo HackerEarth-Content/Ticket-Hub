@@ -27,6 +27,14 @@ function AgentRowCells({ a }: { a: AgentKpi }) {
       <td className="num">{formatPercent(a.backline_escalation_percentage)}</td>
       <td className="num">{formatNumber(a.resolved_by_backline_engineering_count)}</td>
       <td className="num">{formatNumber(a.escalated_to_engineering_count)}</td>
+      <td className="num">
+        {formatPercent(a.csat_normalized_percentage)}
+        {a.csat_response_count > 0 && (
+          <span className="card-sub" style={{ marginLeft: 4 }}>
+            ({a.csat_response_count})
+          </span>
+        )}
+      </td>
     </>
   );
 }
@@ -65,6 +73,7 @@ export function AgentLeaderboard({ agents, loading }: Props) {
                 <th className="num">Escalated</th>
                 <th className="num">Resolved by Backline Eng</th>
                 <th className="num">Escalated to Eng</th>
+                <th className="num">CSAT</th>
               </tr>
             </thead>
             <tbody>

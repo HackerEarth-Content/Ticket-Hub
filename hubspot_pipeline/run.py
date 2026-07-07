@@ -32,9 +32,10 @@ _FULL_PULL_DAYS = 3650
 async def _main(days: int, out: str | None, write_db: bool, incremental: bool) -> None:
     if incremental:
         await db_manager.initialize()
-        stats = await pipeline.run_incremental()
+        ticket_stats = await pipeline.run_incremental()
+        csat_stats = await pipeline.run_csat_incremental()
         await db_manager.close()
-        print(json.dumps(stats, indent=2))
+        print(json.dumps({"tickets": ticket_stats, "csat": csat_stats}, indent=2))
         return
 
     since_ms = int((time.time() - days * 86400) * 1000)
@@ -49,8 +50,15 @@ async def _main(days: int, out: str | None, write_db: bool, incremental: bool) -
     if write_db:
         await db_manager.initialize()
         await db_writer.upsert_tickets(tickets)
+        # CSAT matching reads ticket owner/closed_at from the DB, so this
+        # must run after the ticket upsert above.
+        csat_submissions = await pipeline.extract_csat(since_ms)
+        await db_writer.upsert_csat_responses(csat_submissions)
         await db_manager.close()
-        print(f"Upserted {len(tickets)} ticket(s) into the database")
+        print(
+            f"Upserted {len(tickets)} ticket(s) and {len(csat_submissions)} "
+            "CSAT response(s) into the database"
+        )
 
 
 def main() -> None:

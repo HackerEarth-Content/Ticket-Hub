@@ -40,7 +40,6 @@ TICKET_PROPERTIES = [
     "hs_lastmodifieddate",
     "hs_time_to_first_response_sla_status",
     "hs_time_to_close_sla_status",
-    "hs_last_csat_rating",
     "source_type",
     # Backline/frontline reporting fields, verified live 2026-07-04.
     "final_resolution",
@@ -55,6 +54,12 @@ TICKET_PROPERTIES = [
     "blackops_account_name",
     "other_blackops_account_name",
     "hs_primary_company_name",
+    # HubSpot's own "module" dropdown (Assessment/Upskilling/Spam/etc, see
+    # category_taxonomy.json's module comment for why this is a SEPARATE
+    # concept from this pipeline's derived `module`) -- needed to match the
+    # native "CSAT Score (Ticket owners)" report's ticket exclusion filter,
+    # see dashboard/utils.py's get_csat.
+    "module",
 ] + [
     f"hs_v2_{event}_{stage['stage_id']}"
     for stage in STAGE_TIMING_STAGES.values()
@@ -70,6 +75,20 @@ TICKET_PROPERTIES = [
 _CHUNK_DAYS = 20
 _DAY_MS = 86_400_000
 _SAFE_RESULT_CAP = 9500
+
+# CSAT eligibility, matched to this portal's native "CSAT Score (Ticket
+# owners)" report (which reads off a Contact-level "Last CSAT survey rating"
+# rollup, not a single survey name) -- verified live 2026-07-07:
+#   - hs_survey_type == "CSAT" covers every survey of that type in this
+#     portal ("Customer Satisfaction Survey - Support" + the differently
+#     named "Customer Satisfaction Survey ", confirmed to sum exactly to the
+#     type-wide total: 2808 + 6399 == 9207).
+#   - "CSAT Sharable link new" is a CUSTOM-type survey but is CSAT-purpose by
+#     name -- included explicitly since CUSTOM alone would also pull in
+#     unrelated surveys like "Registration Email Survey".
+CSAT_SURVEY_TYPE = "CSAT"
+CSAT_SHARABLE_LINK_SURVEY_NAME = "CSAT Sharable link new"
+CSAT_SUBMISSION_PROPERTIES = ["hs_value", "hs_submission_timestamp"]
 
 
 def _headers() -> dict[str, str]:
@@ -198,3 +217,86 @@ class HubSpotClient:
                 yield raw
 
             after = data.get("paging", {}).get("next", {}).get("after")
+
+    async def fetch_csat_submissions(self, since_ms: int) -> AsyncIterator[list[dict]]:
+        """Yield pages of raw feedback_submissions dicts eligible as CSAT
+        (see CSAT_SURVEY_TYPE/CSAT_SHARABLE_LINK_SURVEY_NAME), modified since
+        `since_ms`. Yields pages (not individual records) so callers can
+        batch the association lookups below instead of firing one per
+        submission.
+
+        Run as two separate paginated queries (type=CSAT, ~9.2k total; named
+        Sharable-link survey, ~1k total) rather than one OR'd query -- combined
+        they're past the 10k search-pagination cap, but each is comfortably
+        under it alone."""
+        eligibility_filters = [
+            {"propertyName": "hs_survey_type", "operator": "EQ", "value": CSAT_SURVEY_TYPE},
+            {"propertyName": "hs_survey_name", "operator": "EQ", "value": CSAT_SHARABLE_LINK_SURVEY_NAME},
+        ]
+        async with aiohttp.ClientSession() as session:
+            for eligibility_filter in eligibility_filters:
+                async for page in self._fetch_csat_query(session, eligibility_filter, since_ms):
+                    yield page
+
+    async def _fetch_csat_query(
+        self, session: aiohttp.ClientSession, eligibility_filter: dict, since_ms: int
+    ) -> AsyncIterator[list[dict]]:
+        url = f"{_BASE}/crm/v3/objects/feedback_submissions/search"
+        body: dict = {
+            "filterGroups": [{"filters": [
+                eligibility_filter,
+                {"propertyName": "hs_submission_timestamp", "operator": "GTE", "value": str(since_ms)},
+            ]}],
+            "properties": CSAT_SUBMISSION_PROPERTIES,
+            "limit": 100,
+            "sorts": [{"propertyName": "hs_submission_timestamp", "direction": "ASCENDING"}],
+        }
+        while True:
+            async with session.post(url, headers=_headers(), json=body) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+
+            results = data.get("results", [])
+            if results:
+                yield results
+
+            after = data.get("paging", {}).get("next", {}).get("after")
+            if not after:
+                break
+            body["after"] = after
+
+    async def fetch_submission_contacts(self, submission_ids: list[str]) -> dict[str, str]:
+        """submission_id -> contact_id. The search endpoint above doesn't
+        return associations, so this is a separate v4 batch association call --
+        Feedback Submissions associate only to the contact who responded, not
+        to a ticket (verified live 2026-07-07)."""
+        if not submission_ids:
+            return {}
+        url = f"{_BASE}/crm/v4/associations/feedback_submissions/contacts/batch/read"
+        body = {"inputs": [{"id": sid} for sid in submission_ids]}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=_headers(), json=body) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        return {
+            r["from"]["id"]: str(r["to"][0]["toObjectId"])
+            for r in data.get("results", [])
+            if r.get("to")
+        }
+
+    async def fetch_contact_tickets(self, contact_ids: list[str]) -> dict[str, list[str]]:
+        """contact_id -> [ticket_id, ...] -- candidates for matching a CSAT
+        response back to the ticket it was likely about (see
+        hubspot_pipeline.pipeline._match_ticket)."""
+        if not contact_ids:
+            return {}
+        url = f"{_BASE}/crm/v4/associations/contacts/tickets/batch/read"
+        body = {"inputs": [{"id": cid} for cid in contact_ids]}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=_headers(), json=body) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        return {
+            r["from"]["id"]: [str(t["toObjectId"]) for t in r.get("to", [])]
+            for r in data.get("results", [])
+        }

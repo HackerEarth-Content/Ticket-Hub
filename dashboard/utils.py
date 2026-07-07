@@ -20,10 +20,26 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.orm import SyncCursor, Ticket
+from core.orm import CsatResponse, SyncCursor, Ticket
 
 _OPEN_STATUSES = ("New", "Open", "Pending", "Closing")
 _BREACH_STATUSES = ("Due Soon", "Overdue")
+
+# HubSpot's native "module" ticket property values (not this pipeline's own
+# derived `module`, see hubspot_pipeline/client.py) to exclude from CSAT --
+# matches the native "CSAT Score (Ticket owners)" report's ticket filter.
+_CSAT_EXCLUDED_NATIVE_MODULES = ("NA", "Duplicate", "Spam")
+
+
+def _csat_native_module_allowed():
+    """Ticket.hubspot_module.notin_(...) alone would also drop every ticket
+    that never had this optional dropdown set -- SQL NOT IN treats NULL as
+    unknown, not "not excluded". Those tickets aren't flagged Not
+    Actionable/Duplicate/Spam, so they should still count."""
+    return or_(
+        Ticket.hubspot_module.is_(None),
+        Ticket.hubspot_module.notin_(_CSAT_EXCLUDED_NATIVE_MODULES),
+    )
 
 _PERIODS = ("today", "yesterday", "week", "month")
 
@@ -465,61 +481,62 @@ async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
 
 
 def _normalized_csat_percentage(rating_counts: dict) -> float | None:
-    """(Happy*2 + Neutral) / (total*2) * 100, per the reference frontline
-    report's CSAT formula -- assumes hs_last_csat_rating uses that report's
-    0=Unhappy/1=Neutral/2=Happy scale, which HubSpot doesn't document and
-    this portal hasn't confirmed (see get_csat's rating_scale_confirmed)."""
-    happy = rating_counts.get("2", 0)
-    neutral = rating_counts.get("1", 0)
-    unhappy = rating_counts.get("0", 0)
-    total = happy + neutral + unhappy
+    """(Promoter*2 + Passive) / (total*2) * 100, per the reference frontline
+    report's CSAT formula. Scale is confirmed via HubSpot's hs_response_group
+    on the CSAT survey: 0=Detractor, 1=Passive, 2=Promoter (see get_csat)."""
+    promoter = rating_counts.get(2, 0)
+    passive = rating_counts.get(1, 0)
+    detractor = rating_counts.get(0, 0)
+    total = promoter + passive + detractor
     if not total:
         return None
-    return round((happy * 2 + neutral) / (total * 2) * 100, 1)
+    return round((promoter * 2 + passive) / (total * 2) * 100, 1)
 
 
 async def get_csat(session: AsyncSession, period: str) -> dict:
-    """Raw rating distribution plus a normalized CSAT % -- HubSpot exposes
-    hs_last_csat_rating as an opaque rollup with no documented scale, so the
-    normalized % below assumes the reference report's 0/1/2 scale and should
-    be confirmed with whoever set up the survey before treating it as ground
-    truth (see rating_scale_confirmed).
+    """Rating distribution plus normalized CSAT %, from HubSpot's email CSAT
+    survey ("Customer Satisfaction Survey - Support", Feedback Submissions
+    object) -- replaces the old Ticket.csat_rating (hs_last_csat_rating,
+    chat-only) rollup, which had an unconfirmed rating scale.
 
-    Also broken down by channel (source_type) -- verified live values in this
-    portal are EMAIL/CHAT/Slack, not the generic "LIVE_CHAT" a HubSpot doc
-    might suggest, so channel labels here reflect actual data, not a guess.
+    Scoped by the matched ticket's created_at, like every other KPI on this
+    dashboard -- NOT by when the survey was submitted, which can lag ticket
+    creation by days and would silently disagree with every other number for
+    the same period filter. Ticket/agent attribution is best-effort: HubSpot
+    only associates a response to the contact who answered it, not the
+    ticket, so each response is matched to that contact's ticket closed
+    nearest the response time (see hubspot_pipeline.pipeline._match_ticket).
+    Unmatched responses have no ticket to scope by created_at, so they can't
+    be included here at all -- unmatched_to_ticket_count reports them
+    separately (by submitted_at, since that's all they have) as a data-
+    quality signal, not folded into normalized_csat_percentage.
     """
     period_start, period_end = resolve_period(period)
-    in_scope = (
-        Ticket.created_at.between(period_start, period_end),
-        _actionable_and_resolved(),
-        Ticket.csat_rating.isnot(None),
-    )
+
     rows = await session.execute(
-        select(Ticket.csat_rating, func.count()).where(*in_scope).group_by(Ticket.csat_rating)
+        select(CsatResponse.rating, func.count())
+        .join(Ticket, Ticket.ticket_id == CsatResponse.ticket_id)
+        .where(
+            Ticket.created_at.between(period_start, period_end),
+            _csat_native_module_allowed(),
+        )
+        .group_by(CsatResponse.rating)
     )
     response_count_by_rating = dict(rows.all())
 
-    channel_rows = await session.execute(
-        select(Ticket.source_type, Ticket.csat_rating, func.count())
-        .where(*in_scope)
-        .group_by(Ticket.source_type, Ticket.csat_rating)
+    unmatched_to_ticket_count = await session.scalar(
+        select(func.count()).where(
+            CsatResponse.submitted_at.between(period_start, period_end),
+            CsatResponse.ticket_id.is_(None),
+        )
     )
-    response_count_by_channel: dict[str, dict[str, int]] = {}
-    for source_type, rating, count in channel_rows.all():
-        channel = source_type or "Unknown"
-        response_count_by_channel.setdefault(channel, {})[rating] = count
 
     return {
         "total_response_count": sum(response_count_by_rating.values()),
         "response_count_by_rating": response_count_by_rating,
-        "response_count_by_rating_and_channel": response_count_by_channel,
         "normalized_csat_percentage": _normalized_csat_percentage(response_count_by_rating),
-        "normalized_csat_percentage_by_channel": {
-            channel: _normalized_csat_percentage(ratings)
-            for channel, ratings in response_count_by_channel.items()
-        },
-        "rating_scale_confirmed": False,
+        "unmatched_to_ticket_count": unmatched_to_ticket_count or 0,
+        "rating_scale_confirmed": True,
     }
 
 
@@ -593,12 +610,30 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
         if (stage_timings.get("engineering") or {}).get("entered_at"):
             eng_escalated_by_owner[owner_id] = eng_escalated_by_owner.get(owner_id, 0) + 1
 
+    # Scoped by the matched ticket's created_at, same convention as every
+    # other column here -- see get_csat's docstring for why submitted_at
+    # would silently disagree with the rest of this row for the same period.
+    csat_rows = await session.execute(
+        select(CsatResponse.owner_id, CsatResponse.rating, func.count())
+        .join(Ticket, Ticket.ticket_id == CsatResponse.ticket_id)
+        .where(
+            Ticket.created_at.between(period_start, period_end),
+            CsatResponse.owner_id.isnot(None),
+            _csat_native_module_allowed(),
+        )
+        .group_by(CsatResponse.owner_id, CsatResponse.rating)
+    )
+    csat_rating_counts_by_owner: dict[str, dict[int, int]] = {}
+    for owner_id, rating, count in csat_rows.all():
+        csat_rating_counts_by_owner.setdefault(owner_id, {})[rating] = count
+
     def _owner_row(owner_id, owner_name, count, median_hours, mean_hours) -> dict:
         actionable_count = actionable_by_owner.get(owner_id, 0)
         closed_count = closed_by_owner.get(owner_id, 0)
         frt_on_time = frt_on_time_by_owner.get(owner_id, 0)
         frt_missed = frt_missed_by_owner.get(owner_id, 0)
         fcr_true = fcr_true_by_owner.get(owner_id, 0)
+        owner_csat_counts = csat_rating_counts_by_owner.get(owner_id, {})
         return {
             "owner_id": owner_id or "unassigned",
             "owner_name": owner_name or "Unassigned",
@@ -623,6 +658,8 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
             "backline_escalation_percentage": _percentage(escalated_by_owner.get(owner_id, 0), count),
             "resolved_by_backline_engineering_count": backline_resolved_by_owner.get(owner_id, 0),
             "escalated_to_engineering_count": eng_escalated_by_owner.get(owner_id, 0),
+            "csat_response_count": sum(owner_csat_counts.values()),
+            "csat_normalized_percentage": _normalized_csat_percentage(owner_csat_counts),
         }
 
     rows = [_owner_row(owner_id, owner_name, count, median_hours, mean_hours) for owner_id, owner_name, count, median_hours, mean_hours in base]
@@ -665,6 +702,22 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     )
     team_row["resolved_by_backline_engineering_count"] = sum(backline_resolved_by_owner.values())
     team_row["escalated_to_engineering_count"] = sum(eng_escalated_by_owner.values())
+
+    # Same created_at scope as the per-owner rows, just without the
+    # owner_id filter -- so this also matches get_csat's team-wide number
+    # for the same period.
+    team_csat_rows = await session.execute(
+        select(CsatResponse.rating, func.count())
+        .join(Ticket, Ticket.ticket_id == CsatResponse.ticket_id)
+        .where(
+            Ticket.created_at.between(period_start, period_end),
+            _csat_native_module_allowed(),
+        )
+        .group_by(CsatResponse.rating)
+    )
+    team_csat_counts = dict(team_csat_rows.all())
+    team_row["csat_response_count"] = sum(team_csat_counts.values())
+    team_row["csat_normalized_percentage"] = _normalized_csat_percentage(team_csat_counts)
 
     return [*rows, team_row]
 

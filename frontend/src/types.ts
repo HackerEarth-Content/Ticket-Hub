@@ -81,9 +81,8 @@ export interface SlaKpis {
 export interface Csat {
   total_response_count: number;
   response_count_by_rating: Record<string, number>;
-  response_count_by_rating_and_channel: Record<string, Record<string, number>>;
   normalized_csat_percentage: number | null;
-  normalized_csat_percentage_by_channel: Record<string, number | null>;
+  unmatched_to_ticket_count: number;
   rating_scale_confirmed: boolean;
 }
 
@@ -107,6 +106,8 @@ export interface AgentKpi {
   backline_escalation_percentage: number | null;
   resolved_by_backline_engineering_count: number;
   escalated_to_engineering_count: number;
+  csat_response_count: number;
+  csat_normalized_percentage: number | null;
 }
 
 export interface NumericStats {

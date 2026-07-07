@@ -12,9 +12,10 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.orm import Ticket
+from core.orm import CsatResponse, Ticket
 from dashboard.utils import (
     _actionable_and_resolved,
+    _csat_native_module_allowed,
     _median_resolution_time_hours_expr,
     _normalized_csat_percentage,
     _OPEN_STATUSES,
@@ -166,11 +167,14 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         .where(Ticket.customer_name.in_(top_customers), Ticket.canonical_status.in_(_OPEN_STATUSES))
         .group_by(Ticket.customer_name)
     )
-    # Same scope get_csat uses (actionable + resolved + rated), same formula.
+    # CSAT responses matched to one of this customer's tickets (see get_csat's
+    # unmatched_to_ticket_count caveat -- unmatched responses can't be
+    # attributed to a customer at all).
     csat_rows = await session.execute(
-        select(Ticket.customer_name, Ticket.csat_rating, func.count())
-        .where(*scoped, _actionable_and_resolved(), Ticket.csat_rating.isnot(None))
-        .group_by(Ticket.customer_name, Ticket.csat_rating)
+        select(Ticket.customer_name, CsatResponse.rating, func.count())
+        .join(CsatResponse, CsatResponse.ticket_id == Ticket.ticket_id)
+        .where(*scoped, _csat_native_module_allowed())
+        .group_by(Ticket.customer_name, CsatResponse.rating)
     )
 
     by_customer = {
@@ -189,7 +193,7 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         }
         for name in top_customers
     }
-    csat_rating_counts: dict[str, dict[str, int]] = {name: {} for name in top_customers}
+    csat_rating_counts: dict[str, dict[int, int]] = {name: {} for name in top_customers}
     for name, bucket, count in resolver_rows.all():
         by_customer[name]["resolution_bucket_counts"][bucket] = count
     for name, priority, count in priority_rows.all():
