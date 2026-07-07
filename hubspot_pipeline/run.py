@@ -3,7 +3,7 @@
 Usage:
     python -m hubspot_pipeline.run --days 7
     python -m hubspot_pipeline.run --days 30 --out tickets.jsonl
-    python -m hubspot_pipeline.run --full   # since HubSpot account creation
+    python -m hubspot_pipeline.run --full   # since _FULL_PULL_FLOOR
 
     # Incremental sync (what the scheduled/cron job should call) --
     # picks up from the last cursor, writes to the DB, advances the cursor.
@@ -19,17 +19,19 @@ import argparse
 import asyncio
 import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from core.database import db_manager
 from hubspot_pipeline import db_writer, pipeline
 
-# Fallback lookback for --full; HubSpot doesn't expose an "account created"
-# API, so this just needs to predate the oldest ticket.
-_FULL_PULL_DAYS = 3650
+# Floor for --full -- NOT HubSpot account creation. Tickets before this date
+# were intentionally deleted from the DB (2026-07-07); a --full pull that
+# reached back further would just re-fetch and re-insert them.
+_FULL_PULL_FLOOR = datetime(2026, 2, 2, tzinfo=timezone.utc)
 
 
-async def _main(days: int, out: str | None, write_db: bool, incremental: bool) -> None:
+async def _main(since_ms: int, out: str | None, write_db: bool, incremental: bool) -> None:
     if incremental:
         await db_manager.initialize()
         ticket_stats = await pipeline.run_incremental()
@@ -38,7 +40,6 @@ async def _main(days: int, out: str | None, write_db: bool, incremental: bool) -
         print(json.dumps({"tickets": ticket_stats, "csat": csat_stats}, indent=2))
         return
 
-    since_ms = int((time.time() - days * 86400) * 1000)
     tickets = await pipeline.extract(since_ms)
     stats = pipeline.summarize(tickets)
     print(json.dumps(stats, indent=2))
@@ -76,8 +77,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    days = _FULL_PULL_DAYS if args.full else args.days
-    asyncio.run(_main(days=days, out=args.out, write_db=args.write_db, incremental=args.incremental))
+    if args.full:
+        since_ms = int(_FULL_PULL_FLOOR.timestamp() * 1000)
+    else:
+        since_ms = int((time.time() - args.days * 86400) * 1000)
+
+    asyncio.run(
+        _main(since_ms=since_ms, out=args.out, write_db=args.write_db, incremental=args.incremental)
+    )
 
 
 if __name__ == "__main__":
