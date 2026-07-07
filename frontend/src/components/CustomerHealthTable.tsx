@@ -24,7 +24,7 @@ export function CustomerHealthTable({ data, loading }: Props) {
         <div>
           <div className="card-title">Account health</div>
           <div className="card-sub">
-            SLA compliance, speed, escalation rate, current open backlog, and CSAT per top account
+            SLA compliance, speed, escalation rate, and current open backlog per top account
           </div>
         </div>
       </div>
@@ -43,7 +43,6 @@ export function CustomerHealthTable({ data, loading }: Props) {
                 <th className="num">Median resolution</th>
                 <th className="num">Escalated</th>
                 <th className="num">Open backlog</th>
-                <th className="num">CSAT</th>
               </tr>
             </thead>
             <tbody>
@@ -78,7 +77,6 @@ export function CustomerHealthTable({ data, loading }: Props) {
                         {formatNumber(c.open_backlog_count)}
                       </span>
                     </td>
-                    <td className="num">{formatPercent(c.normalized_csat_percentage)}</td>
                   </tr>
                 );
               })}

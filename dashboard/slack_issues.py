@@ -32,6 +32,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             Ticket.reporter_contact_name,
             Ticket.owner_name,
             Ticket.stage_label,
+            Ticket.canonical_status,
             Ticket.created_at,
         )
         .where(
@@ -41,22 +42,47 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         .order_by(Ticket.created_at.desc())
     )
 
-    issues = [
-        {
+    issues = []
+    by_reporter: dict[str, dict] = {}
+    for (
+        ticket_id,
+        subject,
+        reporter_contact_name,
+        owner_name,
+        stage_label,
+        canonical_status,
+        created_at,
+    ) in rows.all():
+        reporter_name = reporter_contact_name or owner_name or "Unassigned"
+        issues.append({
             "ticket_id": ticket_id,
             "subject": subject,
-            "reporter_name": reporter_contact_name or owner_name or "Unassigned",
+            "reporter_name": reporter_name,
             "reporter_is_fallback_owner": reporter_contact_name is None,
             "owner_name": owner_name,
             "stage_label": stage_label,
             "created_at": created_at.isoformat() if created_at else None,
-        }
-        for ticket_id, subject, reporter_contact_name, owner_name, stage_label, created_at in rows.all()
-    ]
+        })
+
+        # Aggregated across every matching ticket, not just the truncated
+        # page below -- a chart summarizing "who reports issues" shouldn't
+        # undercount past the drilldown cap.
+        bucket = by_reporter.setdefault(reporter_name, {"reported_count": 0, "solved_count": 0})
+        bucket["reported_count"] += 1
+        if canonical_status == "Resolved":
+            bucket["solved_count"] += 1
 
     truncated = len(issues) > _DRILLDOWN_LIMIT
     return {
         "issue_count": len(issues),
         "issues": issues[:_DRILLDOWN_LIMIT],
         "truncated": truncated,
+        "by_reporter": sorted(
+            (
+                {"reporter_name": name, **counts}
+                for name, counts in by_reporter.items()
+            ),
+            key=lambda r: r["reported_count"],
+            reverse=True,
+        ),
     }

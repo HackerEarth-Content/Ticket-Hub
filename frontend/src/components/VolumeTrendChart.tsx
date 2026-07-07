@@ -88,7 +88,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
       ) : (
         <>
           <ResponsiveContainer width="100%" height={210}>
-            <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="fillCreated" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--accent-blue)" stopOpacity={0.16} />
@@ -114,6 +114,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
                 tickLine={false}
                 width={32}
                 allowDecimals={false}
+                domain={[0, "auto"]}
               />
               <Tooltip
                 content={<ChartTooltip granularity={granularity} />}
@@ -126,6 +127,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
                 stroke="var(--accent-blue)"
                 strokeWidth={2.25}
                 fill="url(#fillCreated)"
+                isAnimationActive={false}
                 dot={
                   data.length === 1
                     ? { r: 4, strokeWidth: 2, stroke: "var(--surface)", fill: "var(--accent-blue)" }
@@ -140,6 +142,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
                 stroke="var(--accent-aqua)"
                 strokeWidth={2.25}
                 fill="url(#fillResolved)"
+                isAnimationActive={false}
                 dot={
                   data.length === 1
                     ? { r: 4, strokeWidth: 2, stroke: "var(--surface)", fill: "var(--accent-aqua)" }

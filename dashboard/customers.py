@@ -12,12 +12,10 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.orm import CsatResponse, Ticket
+from core.orm import Ticket
 from dashboard.utils import (
     _actionable_and_resolved,
-    _csat_native_module_allowed,
     _median_resolution_time_hours_expr,
-    _normalized_csat_percentage,
     _OPEN_STATUSES,
     _percentage,
     resolve_period,
@@ -167,15 +165,6 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         .where(Ticket.customer_name.in_(top_customers), Ticket.canonical_status.in_(_OPEN_STATUSES))
         .group_by(Ticket.customer_name)
     )
-    # CSAT responses matched to one of this customer's tickets (see get_csat's
-    # unmatched_to_ticket_count caveat -- unmatched responses can't be
-    # attributed to a customer at all).
-    csat_rows = await session.execute(
-        select(Ticket.customer_name, CsatResponse.rating, func.count())
-        .join(CsatResponse, CsatResponse.ticket_id == Ticket.ticket_id)
-        .where(*scoped, _csat_native_module_allowed())
-        .group_by(Ticket.customer_name, CsatResponse.rating)
-    )
 
     by_customer = {
         name: {
@@ -189,11 +178,9 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
             "escalated_count": 0,
             "escalated_percentage": None,
             "open_backlog_count": 0,
-            "normalized_csat_percentage": None,
         }
         for name in top_customers
     }
-    csat_rating_counts: dict[str, dict[int, int]] = {name: {} for name in top_customers}
     for name, bucket, count in resolver_rows.all():
         by_customer[name]["resolution_bucket_counts"][bucket] = count
     for name, priority, count in priority_rows.all():
@@ -213,11 +200,22 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         by_customer[name]["escalated_percentage"] = _percentage(escalated_count, total_count)
     for name, count in backlog_rows.all():
         by_customer[name]["open_backlog_count"] = count
-    for name, rating, count in csat_rows.all():
-        csat_rating_counts[name][rating] = count
-    for name in top_customers:
-        by_customer[name]["normalized_csat_percentage"] = _normalized_csat_percentage(
-            csat_rating_counts[name]
+
+    # Top-15-by-volume can still include a customer with zero actionable/
+    # resolved tickets this period (e.g. everything's still New/Pending) --
+    # every other column is blank for that row, so drop it instead of
+    # showing a customer name with nothing but dashes next to it.
+    def _has_data(entry: dict) -> bool:
+        return (
+            entry["median_resolution_time_hours"] is not None
+            or entry["median_first_response_hours"] is not None
+            or entry["sla_met_count"] + entry["sla_breached_count"] > 0
+            or entry["escalated_count"] > 0
+            or entry["open_backlog_count"] > 0
         )
 
-    return {"customers": [by_customer[name] for name in top_customers]}
+    return {
+        "customers": [
+            by_customer[name] for name in top_customers if _has_data(by_customer[name])
+        ]
+    }

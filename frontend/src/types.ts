@@ -167,10 +167,17 @@ export interface SlackIssue {
   created_at: string | null;
 }
 
+export interface SlackReporterCounts {
+  reporter_name: string;
+  reported_count: number;
+  solved_count: number;
+}
+
 export interface SlackIssues {
   issue_count: number;
   issues: SlackIssue[];
   truncated: boolean;
+  by_reporter: SlackReporterCounts[];
 }
 
 export interface StageTimingEntry {
@@ -338,7 +345,6 @@ export interface CustomerDetailsEntry {
   escalated_count: number;
   escalated_percentage: number | null;
   open_backlog_count: number;
-  normalized_csat_percentage: number | null;
 }
 
 export interface CustomerDetails {

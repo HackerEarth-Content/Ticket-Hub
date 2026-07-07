@@ -27,6 +27,7 @@ import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
+import { SlackReporterPieChart } from "./components/SlackReporterPieChart";
 import { SectionHeading } from "./components/SectionHeading";
 import { TabNav, type DashboardTab } from "./components/TabNav";
 import { useAuth } from "./hooks/useAuth";
@@ -190,6 +191,9 @@ export default function App() {
       {tab === "content_oncall" && (
         <>
           <SectionHeading title="Content/On-call" color="var(--accent-magenta)" />
+          <div style={{ marginBottom: 14 }}>
+            <SlackReporterPieChart data={data?.slackIssues?.by_reporter ?? []} loading={loading} />
+          </div>
           <ContentOnCallTable data={data?.slackIssues ?? null} loading={loading} />
         </>
       )}
