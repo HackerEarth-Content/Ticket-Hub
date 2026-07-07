@@ -16,6 +16,7 @@ import type {
   Granularity,
   LiveToday,
   ModuleDistribution,
+  ModuleTickets,
   Period,
   Pipelines,
   ResolutionByPriority,
@@ -24,6 +25,7 @@ import type {
   SourceDistribution,
   StageDistribution,
   StatusDistribution,
+  StatusTickets,
   Summary,
   SyncNowResult,
   SyncStatus,
@@ -63,8 +65,12 @@ export const api = {
     get<VolumeTrendPoint[]>("/volume/trend", { period, granularity }),
   moduleDistribution: (period: Period) =>
     get<ModuleDistribution>("/distribution/module", { period }),
+  moduleTickets: (period: Period) =>
+    get<ModuleTickets>("/distribution/module/tickets", { period }),
   statusDistribution: (period: Period) =>
     get<StatusDistribution>("/distribution/status", { period }),
+  statusTickets: (period: Period) =>
+    get<StatusTickets>("/distribution/status/tickets", { period }),
   stageDistribution: (period: Period) =>
     get<StageDistribution>("/distribution/stage", { period }),
   sourceDistribution: (period: Period) =>

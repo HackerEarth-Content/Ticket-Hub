@@ -43,6 +43,15 @@ async def distribution_module(
     return await utils.get_module_distribution(session, period)
 
 
+@router.get("/distribution/module/tickets")
+async def distribution_module_tickets(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    return await utils.get_module_tickets(session, period)
+
+
 @router.get("/distribution/source")
 async def distribution_source(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     return await utils.get_source_distribution(session, period)
@@ -55,6 +64,16 @@ async def distribution_status(
     session: AsyncSession = Depends(get_session),
 ):
     return await utils.get_status_distribution(session, period, pipeline_id)
+
+
+@router.get("/distribution/status/tickets")
+async def distribution_status_tickets(
+    period: str = PeriodParam,
+    pipeline_id: str | None = None,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    return await utils.get_status_tickets(session, period, pipeline_id)
 
 
 @router.get("/distribution/stage")

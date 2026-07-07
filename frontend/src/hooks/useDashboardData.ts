@@ -60,7 +60,15 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
     ]);
 
     const privateData: Promise<
-      [DashboardData["agents"], DashboardData["aePerformance"], DashboardData["escalations"], DashboardData["anomalies"], DashboardData["uncategorized"]]
+      [
+        DashboardData["agents"],
+        DashboardData["aePerformance"],
+        DashboardData["escalations"],
+        DashboardData["anomalies"],
+        DashboardData["uncategorized"],
+        DashboardData["moduleTickets"],
+        DashboardData["statusTickets"],
+      ]
     > = isLoggedIn
       ? Promise.all([
           api.agents(period),
@@ -68,8 +76,10 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
           api.escalations(period),
           api.anomalies(period),
           api.uncategorized(period),
-        ]).catch(() => [[], null, null, null, null])
-      : Promise.resolve([[], null, null, null, null]);
+          api.moduleTickets(period),
+          api.statusTickets(period),
+        ]).catch(() => [[], null, null, null, null, null, null])
+      : Promise.resolve([[], null, null, null, null, null, null]);
 
     Promise.all([publicData, privateData])
       .then(
@@ -94,7 +104,7 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
             customerStatus,
             customerDetails,
           ],
-          [agents, aePerformance, escalations, anomalies, uncategorized],
+          [agents, aePerformance, escalations, anomalies, uncategorized, moduleTickets, statusTickets],
         ]) => {
           if (cancelled) return;
           setState({
@@ -121,6 +131,8 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
               resolutionOwnership,
               anomalies,
               uncategorized,
+              moduleTickets,
+              statusTickets,
               customerVolume,
               customerStatus,
               customerDetails,

@@ -1,4 +1,6 @@
-import type { ModuleDistribution } from "../types";
+import { useState } from "react";
+import type { ModuleDistribution, ModuleTickets } from "../types";
+import { hubspotTicketUrl } from "../format";
 import { BarList } from "./BarList";
 
 // Fixed categorical order -- validated for CVD-safe adjacency (see color report).
@@ -17,11 +19,16 @@ const MAX_SLOTS = 8;
 
 interface Props {
   distribution: ModuleDistribution | null;
+  moduleTickets: ModuleTickets | null;
   loading: boolean;
 }
 
-export function ModuleDistributionCard({ distribution, loading }: Props) {
+export function ModuleDistributionCard({ distribution, moduleTickets, loading }: Props) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const items = buildItems(distribution);
+  // "Other" is a frontend-only fold of the tail modules -- there's no single
+  // real module behind it, so it isn't clickable.
+  const group = expanded ? moduleTickets?.tickets_by_module[expanded] : null;
 
   return (
     <div className="card">
@@ -32,13 +39,58 @@ export function ModuleDistributionCard({ distribution, loading }: Props) {
             {items.length > MAX_SLOTS - 1
               ? `Top ${MAX_SLOTS - 1}, tail folded into Other`
               : "All modules this period"}
+            {moduleTickets ? " — click a module for its tickets" : ""}
           </div>
         </div>
       </div>
       {loading ? (
         <div className="skeleton" style={{ height: 180, width: "100%" }} />
       ) : (
-        <BarList items={items} />
+        <>
+          <BarList
+            items={items}
+            activeLabel={expanded}
+            onItemClick={
+              moduleTickets
+                ? (label) =>
+                    moduleTickets.tickets_by_module[label] &&
+                    setExpanded(expanded === label ? null : label)
+                : undefined
+            }
+          />
+          {group && (
+            <div className="tbl-wrap" style={{ marginTop: 12 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.tickets.map((t) => (
+                    <tr key={t.ticket_id}>
+                      <td className="name-cell" title={t.subject}>
+                        <a href={hubspotTicketUrl(t.ticket_id)} target="_blank" rel="noopener noreferrer">
+                          {t.subject || t.ticket_id}
+                        </a>
+                        <div className="card-sub">#{t.ticket_id}</div>
+                      </td>
+                      <td>{t.canonical_status}</td>
+                      <td>{t.owner_name ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {group.truncated && (
+                <div className="card-sub" style={{ marginTop: 6 }}>
+                  Showing first {group.tickets.length} of {group.count}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

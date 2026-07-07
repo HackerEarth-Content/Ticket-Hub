@@ -40,6 +40,28 @@ export interface StatusDistribution {
   ticket_count_by_status: Record<string, number>;
 }
 
+export interface DrilldownTicket {
+  ticket_id: string;
+  subject: string;
+  canonical_status?: string;
+  module?: string;
+  owner_name: string | null;
+}
+
+export interface TicketDrilldownGroup {
+  count: number;
+  tickets: DrilldownTicket[];
+  truncated: boolean;
+}
+
+export interface ModuleTickets {
+  tickets_by_module: Record<string, TicketDrilldownGroup>;
+}
+
+export interface StatusTickets {
+  tickets_by_status: Record<string, TicketDrilldownGroup>;
+}
+
 export interface StageDistribution {
   ticket_count_by_pipeline_and_stage: Record<string, Record<string, number>>;
 }
@@ -321,6 +343,8 @@ export interface DashboardData {
   escalations: BacklineEscalations | null;
   anomalies: DataAnomalies | null;
   uncategorized: UncategorizedTickets | null;
+  moduleTickets: ModuleTickets | null;
+  statusTickets: StatusTickets | null;
 
   dataQuality: DataQuality;
   stageTiming: BacklineStageTiming;

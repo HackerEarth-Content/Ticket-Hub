@@ -303,6 +303,46 @@ async def get_module_distribution(session: AsyncSession, period: str) -> dict:
     return {"ticket_count_by_module": dict(rows.all())}
 
 
+# Same cap/shape convention as the anomaly/uncategorized drill-downs
+# (dashboard/frontline.py) -- a handful of small per-key ticket lists, not
+# one unbounded dump.
+_DRILLDOWN_LIMIT = 100
+
+
+async def get_module_tickets(session: AsyncSession, period: str) -> dict:
+    """Ticket-level drill-down behind each bar in the module distribution
+    chart -- most recent first, capped per module."""
+    period_start, period_end = resolve_period(period)
+    in_period = Ticket.created_at.between(period_start, period_end)
+
+    modules = await session.execute(
+        select(Ticket.module, func.count()).where(in_period).group_by(Ticket.module)
+    )
+
+    tickets_by_module = {}
+    for module, total in modules.all():
+        rows = await session.execute(
+            select(Ticket.ticket_id, Ticket.subject, Ticket.canonical_status, Ticket.owner_name)
+            .where(in_period, Ticket.module == module)
+            .order_by(Ticket.created_at.desc())
+            .limit(_DRILLDOWN_LIMIT)
+        )
+        tickets_by_module[module] = {
+            "count": total,
+            "tickets": [
+                {
+                    "ticket_id": r.ticket_id,
+                    "subject": r.subject,
+                    "canonical_status": r.canonical_status,
+                    "owner_name": r.owner_name,
+                }
+                for r in rows.all()
+            ],
+            "truncated": total > _DRILLDOWN_LIMIT,
+        }
+    return {"tickets_by_module": tickets_by_module}
+
+
 async def get_source_distribution(session: AsyncSession, period: str) -> dict:
     """Channel mix (source_type) across all tickets in the period -- e.g.
     EMAIL vs CHAT vs Slack. General/org-wide, not scoped to any team or
@@ -329,6 +369,45 @@ async def get_status_distribution(
         stmt = stmt.where(Ticket.pipeline_id == pipeline_id)
     rows = await session.execute(stmt.group_by(Ticket.canonical_status))
     return {"ticket_count_by_status": dict(rows.all())}
+
+
+async def get_status_tickets(
+    session: AsyncSession, period: str, pipeline_id: str | None
+) -> dict:
+    """Ticket-level drill-down behind each bar in the active-pipeline chart
+    -- scoped to the same lifecycle statuses that chart shows (excludes
+    Resolved, same as get_status_distribution's frontend consumer)."""
+    period_start, period_end = resolve_period(period)
+    filters = [Ticket.created_at.between(period_start, period_end), Ticket.canonical_status.in_(_OPEN_STATUSES)]
+    if pipeline_id:
+        filters.append(Ticket.pipeline_id == pipeline_id)
+
+    statuses = await session.execute(
+        select(Ticket.canonical_status, func.count()).where(*filters).group_by(Ticket.canonical_status)
+    )
+
+    tickets_by_status = {}
+    for status, total in statuses.all():
+        rows = await session.execute(
+            select(Ticket.ticket_id, Ticket.subject, Ticket.module, Ticket.owner_name)
+            .where(*filters, Ticket.canonical_status == status)
+            .order_by(Ticket.created_at.desc())
+            .limit(_DRILLDOWN_LIMIT)
+        )
+        tickets_by_status[status] = {
+            "count": total,
+            "tickets": [
+                {
+                    "ticket_id": r.ticket_id,
+                    "subject": r.subject,
+                    "module": r.module,
+                    "owner_name": r.owner_name,
+                }
+                for r in rows.all()
+            ],
+            "truncated": total > _DRILLDOWN_LIMIT,
+        }
+    return {"tickets_by_status": tickets_by_status}
 
 
 async def get_median_resolution_time_by_priority(session: AsyncSession, period: str) -> dict:

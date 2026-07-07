@@ -99,11 +99,19 @@ export default function App() {
             granularity={granularity}
           />
           <div className="grid cols-2" style={{ margin: "14px 0" }}>
-            <ModuleDistributionCard distribution={data?.moduleDistribution ?? null} loading={loading} />
+            <ModuleDistributionCard
+              distribution={data?.moduleDistribution ?? null}
+              moduleTickets={data?.moduleTickets ?? null}
+              loading={loading}
+            />
             <SourceDistributionCard distribution={data?.sourceDistribution ?? null} loading={loading} />
           </div>
 
-          <StatusDistributionCard distribution={data?.statusDistribution ?? null} loading={loading} />
+          <StatusDistributionCard
+            distribution={data?.statusDistribution ?? null}
+            statusTickets={data?.statusTickets ?? null}
+            loading={loading}
+          />
 
           <BottleneckTable stageDistribution={data?.stageDistribution ?? null} loading={loading} />
 
