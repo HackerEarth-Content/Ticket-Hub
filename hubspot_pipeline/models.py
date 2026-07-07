@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel
@@ -50,6 +51,22 @@ def _sla_met(raw: str | None) -> bool | None:
     return raw == "1"
 
 
+_REPORTED_BY_RE = re.compile(r"^Reported By:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+
+def _extract_reported_by(content: str | None) -> str | None:
+    """Slack-sourced tickets embed "Reported By: <name>" as the first line
+    of their description (verified live 2026-07-07, 14/15 tickets) -- far
+    more reliable than the associated-contact rollup, which is blank for
+    those same 14/15."""
+    if not content:
+        return None
+    match = _REPORTED_BY_RE.search(content)
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
+
 class DashboardTicket(BaseModel):
     """A HubSpot ticket normalized for dashboard KPIs/charts."""
 
@@ -76,6 +93,7 @@ class DashboardTicket(BaseModel):
     owner_name: str | None
     owner_assigned_at: str | None  # hubspot_owner_assigneddate, ISO string
     source_type: str | None
+    reporter_contact_name: str | None  # parsed from ticket content, see _extract_reported_by
 
     created_at: str | None        # createdate, ISO string
     closed_at: str | None         # closed_date, ISO string
@@ -121,6 +139,7 @@ class DashboardTicket(BaseModel):
         derived, inferred = derive_priority(raw_priority, subject, categories, stage_label)
 
         final_resolution = props.get("final_resolution") or None
+        source_type = props.get("source_type") or None
 
         stage_timings = {
             stage_key: {
@@ -153,7 +172,14 @@ class DashboardTicket(BaseModel):
             owner_id=owner_id,
             owner_name=(owners or {}).get(owner_id) if owner_id else None,
             owner_assigned_at=props.get("hubspot_owner_assigneddate"),
-            source_type=props.get("source_type") or None,
+            source_type=source_type,
+            # Slack-only: the "Reported By:" line is a convention of the
+            # Slack ticket-creation flow, not a general description format --
+            # extracting it from other sources' descriptions would be noise,
+            # not signal.
+            reporter_contact_name=(
+                _extract_reported_by(props.get("content")) if source_type == "Slack" else None
+            ),
             created_at=props.get("createdate"),
             closed_at=props.get("closed_date"),
             last_modified_at=props.get("hs_lastmodifieddate"),

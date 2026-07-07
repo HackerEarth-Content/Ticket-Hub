@@ -60,6 +60,11 @@ TICKET_PROPERTIES = [
     # native "CSAT Score (Ticket owners)" report's ticket exclusion filter,
     # see dashboard/utils.py's get_csat.
     "module",
+    # Ticket description -- Slack-sourced tickets embed "Reported By: <name>"
+    # as their first line (verified live 2026-07-07, 14/15 tickets), a far
+    # better reporter signal than the associated-contact rollup (which is
+    # blank for those same 14/15). See DashboardTicket.reporter_contact_name.
+    "content",
 ] + [
     f"hs_v2_{event}_{stage['stage_id']}"
     for stage in STAGE_TIMING_STAGES.values()

@@ -21,6 +21,7 @@ import type {
   Pipelines,
   ResolutionByPriority,
   ResolutionOwnership,
+  SlackIssues,
   SlaKpis,
   SourceDistribution,
   StageDistribution,
@@ -87,6 +88,7 @@ export const api = {
     get<BacklineAePerformance>("/backline/ae-performance", { period }),
   escalations: (period: Period) =>
     get<BacklineEscalations>("/backline/escalations", { period }),
+  slackIssues: (period: Period) => get<SlackIssues>("/slack/issues", { period }),
   stageTiming: (period: Period) =>
     get<BacklineStageTiming>("/backline/stage-timing", { period }),
   frt: (period: Period) => get<FrontlineFrt>("/frontline/frt", { period }),

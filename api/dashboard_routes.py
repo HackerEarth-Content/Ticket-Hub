@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
 from core.users import current_active_user, current_active_user_optional
-from dashboard import backline, customers, frontline, utils
+from dashboard import backline, customers, frontline, slack_issues, utils
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -205,6 +205,11 @@ async def customers_status(period: str = PeriodParam, session: AsyncSession = De
 @router.get("/customers/details")
 async def customers_details(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     return await customers.get_customer_details(session, period)
+
+
+@router.get("/slack/issues")
+async def slack_issues_route(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await slack_issues.get_slack_issues(session, period)
 
 
 @router.get("/meta/sync-status")

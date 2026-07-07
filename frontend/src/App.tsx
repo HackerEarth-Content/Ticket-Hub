@@ -26,6 +26,7 @@ import { CustomerVolumeCard } from "./components/CustomerVolumeCard";
 import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
+import { ContentOnCallTable } from "./components/ContentOnCallTable";
 import { SectionHeading } from "./components/SectionHeading";
 import { TabNav, type DashboardTab } from "./components/TabNav";
 import { useAuth } from "./hooks/useAuth";
@@ -183,6 +184,13 @@ export default function App() {
           <div style={{ marginTop: 14 }}>
             <CustomerHealthTable data={data?.customerDetails ?? null} loading={loading} />
           </div>
+        </>
+      )}
+
+      {tab === "content_oncall" && (
+        <>
+          <SectionHeading title="Content/On-call" color="var(--accent-magenta)" />
+          <ContentOnCallTable data={data?.slackIssues ?? null} loading={loading} />
         </>
       )}
 

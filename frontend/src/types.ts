@@ -157,6 +157,22 @@ export interface BacklineEscalations {
   truncated: boolean;
 }
 
+export interface SlackIssue {
+  ticket_id: string;
+  subject: string;
+  reporter_name: string;
+  reporter_is_fallback_owner: boolean;
+  owner_name: string | null;
+  stage_label: string;
+  created_at: string | null;
+}
+
+export interface SlackIssues {
+  issue_count: number;
+  issues: SlackIssue[];
+  truncated: boolean;
+}
+
 export interface StageTimingEntry {
   label: string;
   entered_count: number;
@@ -346,6 +362,7 @@ export interface DashboardData {
   uncategorized: UncategorizedTickets | null;
   moduleTickets: ModuleTickets | null;
   statusTickets: StatusTickets | null;
+  slackIssues: SlackIssues | null;
 
   dataQuality: DataQuality;
   stageTiming: BacklineStageTiming;
