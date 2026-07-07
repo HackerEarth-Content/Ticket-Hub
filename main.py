@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from core.database import db_manager
 from core.users import fastapi_users
+from hubspot_pipeline.scheduler import start_scheduler
 
 from api.dashboard_routes import router as dashboard_router
 from api.auth_routes import router as auth_router
@@ -21,7 +22,9 @@ from models.users import UserRead, UserUpdate
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db_manager.initialize()
+    scheduler = start_scheduler()
     yield
+    scheduler.shutdown(wait=False)
     await db_manager.close()
 
 app = FastAPI(title="HE Helpdesk Dashboard API", lifespan=lifespan)
