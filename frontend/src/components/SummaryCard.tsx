@@ -55,11 +55,6 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
                   : undefined
               }
             />
-            <StatTile
-              label="SLA breach rate"
-              value={formatPercent(summary.sla_breach_percentage)}
-              tone={(summary.sla_breach_percentage ?? 0) > 15 ? "warn" : "default"}
-            />
             <StatTile label="CSAT responses" value={csatResponses ?? "—"} />
           </>
         )}

@@ -33,6 +33,7 @@ export function DataQualityCard({ dataQuality, uncategorized, loading }: Props) 
             <StatTile
               label="Uncategorized"
               value={formatPercent(dataQuality.uncategorized_ticket_percentage)}
+              foot="of solved/closed tickets"
             />
           </>
         )}

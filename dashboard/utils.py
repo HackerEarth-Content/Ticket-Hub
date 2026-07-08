@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.orm import CsatResponse, SyncCursor, Ticket
 
 _OPEN_STATUSES = ("New", "Open", "Pending", "Closing")
-_BREACH_STATUSES = ("Due Soon", "Overdue")
 
 # HubSpot's native "module" ticket property values (not this pipeline's own
 # derived `module`, see hubspot_pipeline/client.py) to exclude from CSAT --
@@ -150,19 +149,43 @@ async def get_live_today(session: AsyncSession) -> dict:
             Ticket.canonical_status == "Resolved", Ticket.closed_at >= today_start
         )
     )
-    breaching_soon = await session.scalar(
+    # Backward-looking SLA compliance for today's closures (Completed on
+    # time vs Completed late/Overdue), not a forward-looking "at risk of
+    # breaching" count -- the live tile answers "how did today's closures
+    # actually do against SLA", not "what might breach later."
+    resolved_today_on_time = await session.scalar(
         select(func.count()).where(
-            Ticket.canonical_status.in_(_OPEN_STATUSES),
-            or_(
-                Ticket.sla_first_response_status.in_(_BREACH_STATUSES),
-                Ticket.sla_close_status.in_(_BREACH_STATUSES),
-            ),
+            Ticket.canonical_status == "Resolved",
+            Ticket.closed_at >= today_start,
+            Ticket.sla_close_status == "Completed on time",
+        )
+    )
+    # Live FRT compliance -- same "created today" scoping convention as
+    # get_frontline_frt, just for today only and without the actionable/
+    # resolved restriction, so a still-open ticket that already got a timely
+    # first reply isn't excluded from this live signal.
+    first_response_replied_today = await session.scalar(
+        select(func.count()).where(
+            Ticket.created_at >= today_start,
+            Ticket.time_to_first_agent_reply_hours.isnot(None),
+        )
+    )
+    first_response_on_time_today = await session.scalar(
+        select(func.count()).where(
+            Ticket.created_at >= today_start,
+            Ticket.time_to_first_agent_reply_hours.isnot(None),
+            Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS,
         )
     )
     return {
         "open_ticket_count_by_status": dict(status_rows.all()),
         "resolved_today_count": resolved_today or 0,
-        "sla_breaching_soon_count": breaching_soon or 0,
+        "resolved_today_on_time_count": resolved_today_on_time or 0,
+        "resolved_today_on_time_percentage": _percentage(resolved_today_on_time, resolved_today),
+        "first_response_on_time_today_count": first_response_on_time_today or 0,
+        "first_response_on_time_today_percentage": _percentage(
+            first_response_on_time_today, first_response_replied_today
+        ),
         "generated_at": now.isoformat(),
     }
 
@@ -210,19 +233,6 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
         select(func.count()).where(actionable_resolved, _resolution_time_hours_expr() <= 72)
     )
 
-    resolution_sla_rows = await session.execute(
-        select(Ticket.sla_close_status, func.count())
-        .where(
-            Ticket.closed_at.between(period_start, period_end),
-            Ticket.sla_close_status.isnot(None),
-        )
-        .group_by(Ticket.sla_close_status)
-    )
-    resolution_sla_breakdown = dict(resolution_sla_rows.all())
-    resolution_sla_evaluated_count = resolution_sla_breakdown.get(
-        "Completed on time", 0
-    ) + resolution_sla_breakdown.get("Completed late", 0)
-
     return {
         "period": period,
         "period_start": period_start.isoformat(),
@@ -236,9 +246,6 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
             round(mean_resolution_time_hours, 1) if mean_resolution_time_hours is not None else None
         ),
         "tickets_resolved_over_48_hours_count": resolved_over_48_hours_count or 0,
-        "sla_breach_percentage": _percentage(
-            resolution_sla_breakdown.get("Completed late", 0), resolution_sla_evaluated_count
-        ),
         "resolution_within_72_hours_percentage": _percentage(
             actionable_resolved_within_72_hours_count, actionable_resolved_count
         ),
@@ -723,20 +730,30 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
 
 
 async def get_data_quality(session: AsyncSession, period: str) -> dict:
+    """Scoped to Resolved tickets only -- a ticket still sitting in a Pending
+    (team-routing or generic) stage hasn't necessarily been triaged yet, so
+    counting it as "uncategorized" or "priority inferred" would blame data
+    quality for tickets nobody's finished working. Also matches
+    get_uncategorized_tickets' drill-down scope, which was already
+    Resolved-only -- this used to disagree with the headline percentage
+    computed here over every status."""
     period_start, period_end = resolve_period(period)
+    resolved = Ticket.canonical_status == "Resolved"
 
     total_count = await session.scalar(
-        select(func.count()).where(Ticket.created_at.between(period_start, period_end))
+        select(func.count()).where(Ticket.created_at.between(period_start, period_end), resolved)
     )
     priority_inferred_count = await session.scalar(
         select(func.count()).where(
             Ticket.created_at.between(period_start, period_end),
+            resolved,
             Ticket.priority_inferred.is_(True),
         )
     )
     uncategorized_count = await session.scalar(
         select(func.count()).where(
             Ticket.created_at.between(period_start, period_end),
+            resolved,
             Ticket.module == "Uncategorized",
         )
     )

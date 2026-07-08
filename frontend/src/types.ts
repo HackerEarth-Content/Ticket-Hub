@@ -9,7 +9,10 @@ export interface CurrentUser {
 export interface LiveToday {
   open_ticket_count_by_status: Record<string, number>;
   resolved_today_count: number;
-  sla_breaching_soon_count: number;
+  resolved_today_on_time_count: number;
+  resolved_today_on_time_percentage: number | null;
+  first_response_on_time_today_count: number;
+  first_response_on_time_today_percentage: number | null;
   generated_at: string;
 }
 
@@ -22,7 +25,6 @@ export interface Summary {
   median_resolution_time_hours: number | null;
   mean_resolution_time_hours: number | null;
   tickets_resolved_over_48_hours_count: number;
-  sla_breach_percentage: number | null;
   resolution_within_72_hours_percentage: number | null;
 }
 

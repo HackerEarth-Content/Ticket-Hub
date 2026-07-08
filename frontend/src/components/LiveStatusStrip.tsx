@@ -1,7 +1,13 @@
 import type { LiveToday } from "../types";
+import { formatPercent } from "../format";
 import { StatTile, StatTileSkeleton } from "./StatTile";
 
-const ACTIVE_STAGES = ["New", "Open", "Pending", "Closing"];
+// (status key, tile label) -- only "Pending" gets a different display label.
+const ACTIVE_STAGES: [string, string][] = [
+  ["New", "New"],
+  ["Open", "Open"],
+  ["Pending", "Pending on teams"],
+];
 
 interface Props {
   live: LiveToday | null;
@@ -11,29 +17,30 @@ interface Props {
 export function LiveStatusStrip({ live, loading }: Props) {
   if (loading || !live) {
     return (
-      <div className="stat-strip" style={{ marginBottom: 14 }}>
-        {Array.from({ length: 6 }).map((_, i) => (
+      <div className="stat-strip" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 14 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
           <StatTileSkeleton key={i} />
         ))}
       </div>
     );
   }
 
+  const frtOnTimePct = live.first_response_on_time_today_percentage;
+
   return (
-    <div className="stat-strip" style={{ marginBottom: 14 }}>
-      {ACTIVE_STAGES.map((stage) => (
+    <div className="stat-strip" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 14 }}>
+      {ACTIVE_STAGES.map(([status, label]) => (
         <StatTile
-          key={stage}
-          label={stage}
-          value={live.open_ticket_count_by_status[stage] ?? 0}
+          key={status}
+          label={label}
+          value={live.open_ticket_count_by_status[status] ?? 0}
         />
       ))}
-      <StatTile label="Resolved today" value={live.resolved_today_count} tone="good" />
       <StatTile
-        label="SLA breaching soon"
-        value={live.sla_breaching_soon_count}
-        tone={live.sla_breaching_soon_count > 0 ? "warn" : "default"}
-        foot={live.sla_breaching_soon_count > 0 ? "needs attention" : undefined}
+        label="FRT on time"
+        value={live.first_response_on_time_today_count}
+        tone={frtOnTimePct === null ? "default" : frtOnTimePct >= 80 ? "good" : "warn"}
+        foot={frtOnTimePct !== null ? `${formatPercent(frtOnTimePct)} of today's replies` : undefined}
       />
     </div>
   );
