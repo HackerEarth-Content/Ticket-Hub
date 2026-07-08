@@ -20,7 +20,11 @@ Give HackerEarth's support organization a single live view of ticket volume,
 SLA compliance, CSAT, agent workload, backline escalations, customer health,
 and Slack-reported content/on-call requests — replacing manual HubSpot
 report-building with a dashboard that auto-syncs every 5 minutes and answers
-"how are we doing right now" without anyone touching HubSpot directly.
+"how are we doing right now" without anyone touching HubSpot directly. A
+signed-in Excel export (raw ticket rows plus the same KPI numbers shown on
+screen, scoped to the selected period) covers the one thing the live charts
+can't: taking the data offline to slice or share, without going back to
+HubSpot to rebuild it by hand.
 
 ## Brand Personality
 

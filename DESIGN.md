@@ -255,8 +255,9 @@ separation on its own.
   pill) — two different "primary" treatments depending on whether the
   button sits inside a segmented control (period pills: white-on-selected)
   or stands alone (apply: blue-on-white).
-- **Ghost (icon-btn, table-toggle):** transparent/surface-2 background,
-  `--ink-2` text, no border emphasis until hover.
+- **Ghost (icon-btn, table-toggle):** `--surface-2` background with a
+  1px `--line` border at rest, `--ink-2` text — the border doesn't gain
+  emphasis until hover, but it is present at rest (not borderless).
 - **Hover / Focus:** ghost buttons darken text to `--ink`; bordered buttons
   (sign-in) tint their border toward `--accent-blue` at 40% and pick up
   `--shadow`. Focus-visible everywhere gets a 2px `--accent-blue` outline,
@@ -294,16 +295,38 @@ separation on its own.
 - **Layout:** label (11.5px, `--ink-3`) above value (22px mono, `--ink`)
   above an optional foot note (11px, `--ink-3`); an optional inline `.unit`
   span rides next to the value at 13px.
-- **State color:** value text can override to `--status-good` or
-  `--status-critical` (`.value.warn` / `.value.good`) when the metric itself
-  is a pass/fail signal (e.g. SLA breach count) — the only place text color
-  substitutes for the neutral ink default.
+- **State color:** value text can override the neutral ink default via three
+  tone classes — the only place text color substitutes for ink:
+  - `.value.good` → `--status-good`: metric is healthy (e.g. on-time rate
+    above threshold).
+  - `.value.warn` → `--status-warning`: needs attention but hasn't
+    breached (e.g. an on-time rate that's dropped below target).
+  - `.value.critical` → `--status-critical`: an actual breach already
+    happened (e.g. a ticket past its First Response SLA with still no
+    reply) — reserved for breach, not merely "elevated," so it doesn't
+    compete visually with a genuine incident.
 
 ### Chips
 - Small pill badges (status dots + label) used for sync freshness and live
   chip states — 3px/8px padding, `--status-good`/`--status-warning` dot,
   never a chip without an accompanying text label (color alone never carries
   the state).
+
+### Menus (account menu, date-range picker)
+- **Trigger:** for the signed-in account menu, a compact 32×32 circular
+  avatar button matching `.icon-btn`'s own footprint — signing in swaps
+  the "Sign in" link for this trigger without changing how much width the
+  header toolbar needs; the user's name/email and actions live inside the
+  dropdown, not inline in the toolbar, so a long name can never push the
+  header into wrapping.
+- **Panel:** `--surface` background, 1px `--line` border, 9px radius,
+  Popover shadow (`0 8px 24px rgba(20,24,38,.14)`, the same one used by the
+  custom date-range picker — the two floating panels in the system share
+  one shadow language).
+- **Dismissal:** closes on an outside click (account menu) or stays open
+  until an explicit action is taken (date-range picker) — a menu that can
+  cover other content is dismissed more eagerly than a picker the user is
+  actively filling in.
 
 ### Tables
 - Hairline row dividers (`--line`), no zebra striping. Row hover tints to
@@ -347,7 +370,11 @@ separation on its own.
   low information density, dated shadows. (PRODUCT.md anti-reference.)
 - **Don't** use decorative gradients, glassmorphism, or gradient text
   anywhere in the product. (PRODUCT.md anti-reference — this is an ops
-  tool, not a marketing page.)
+  tool, not a marketing page.) One narrow, established exception: the
+  brand mark (`.mark`) and the account-menu avatar both use a small
+  `accent-blue → accent-indigo` gradient as an identity badge, not a
+  decorative surface — don't extend gradients to any new surface beyond
+  these two.
 - **Don't** fold more than 8 categories into a single chart by generating a
   9th hue — fold the tail into "Other" instead.
 - **Don't** reuse a `--status-*` color as a categorical series color, or
