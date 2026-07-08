@@ -14,6 +14,7 @@ import { ResolutionByPriorityCard } from "./components/ResolutionByPriorityCard"
 import { AgentLeaderboard } from "./components/AgentLeaderboard";
 import { DataQualityCard } from "./components/DataQualityCard";
 import { CsatCard } from "./components/CsatCard";
+import { NpsCard } from "./components/NpsCard";
 import { BacklineOverviewCard } from "./components/BacklineOverviewCard";
 import { BacklineAePerformanceCard } from "./components/BacklineAePerformanceCard";
 import { EscalationsTable } from "./components/EscalationsTable";
@@ -143,8 +144,9 @@ export default function App() {
           </div>
 
           <SectionHeading title="Service Health" color="var(--accent-magenta)" />
-          <div className="grid cols-2">
+          <div className="grid cols-3">
             <CsatCard csat={data?.csat ?? null} loading={loading} />
+            <NpsCard nps={data?.nps ?? null} loading={loading} />
             <DataQualityCard
               dataQuality={data?.dataQuality ?? null}
               uncategorized={data?.uncategorized ?? null}

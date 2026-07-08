@@ -116,6 +116,26 @@ class CsatResponse(Base):
     owner_name: Mapped[str | None]
 
 
+class NpsResponse(Base):
+    """A Wootric NPS survey response. Unlike CsatResponse, this isn't tied to
+    a ticket -- NPS is a relationship-level survey, not a per-interaction one
+    -- so it's scoped for KPIs by its own created_at (see dashboard.utils.get_nps).
+    """
+
+    __tablename__ = "nps_responses"
+
+    response_id: Mapped[str] = mapped_column(primary_key=True)
+    end_user_id: Mapped[str | None]
+    email: Mapped[str | None]
+    score: Mapped[int]
+    text: Mapped[str | None]
+    completed: Mapped[bool | None]
+    excluded_from_calculations: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(index=True)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    properties: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
 class SyncCursor(Base):
     """Tracks the last successful incremental-sync timestamp per data source."""
 

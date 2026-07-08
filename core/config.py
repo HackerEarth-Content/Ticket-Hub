@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     # HubSpot search API allows up to 200 results per page
     TICKET_PAGE_SIZE: int = 200
 
+    # Wootric NPS. Left blank means the NPS sync no-ops (see
+    # wootric_pipeline.pipeline.run_incremental) rather than failing startup.
+    WOOTRIC_CLIENT_ID: str = ""
+    WOOTRIC_CLIENT_SECRET: str = ""
+    WOOTRIC_API_BASE: str = "https://api.wootric.com"
+
     # Auth (Google OAuth)
     USER_SECRET: str
     GOOGLE_CLIENT_ID: str

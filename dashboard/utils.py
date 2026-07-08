@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.orm import CsatResponse, SyncCursor, Ticket
+from core.orm import CsatResponse, NpsResponse, SyncCursor, Ticket
 
 _OPEN_STATUSES = ("New", "Open", "Pending", "Closing")
 
@@ -544,6 +544,45 @@ async def get_csat(session: AsyncSession, period: str) -> dict:
         "normalized_csat_percentage": _normalized_csat_percentage(response_count_by_rating),
         "unmatched_to_ticket_count": unmatched_to_ticket_count or 0,
         "rating_scale_confirmed": True,
+    }
+
+
+_NPS_PROMOTER_MIN = 9
+_NPS_DETRACTOR_MAX = 6
+
+
+async def get_nps(session: AsyncSession, period: str) -> dict:
+    """Net Promoter Score from Wootric survey responses: promoters
+    (score 9-10) minus detractors (score 0-6), as a percentage of total
+    responses. Passives (7-8) count toward the total but not the score.
+    Excludes responses Wootric flagged excluded_from_calculations
+    (spam/test submissions). Unlike get_csat, this isn't ticket-matched --
+    NPS is a relationship-level survey -- so it's scoped by the response's
+    own created_at, not a ticket's."""
+    period_start, period_end = resolve_period(period)
+
+    rows = await session.execute(
+        select(NpsResponse.score, func.count())
+        .where(
+            NpsResponse.created_at.between(period_start, period_end),
+            NpsResponse.excluded_from_calculations.is_(False),
+        )
+        .group_by(NpsResponse.score)
+    )
+    response_count_by_score = dict(rows.all())
+
+    promoter_count = sum(c for s, c in response_count_by_score.items() if s >= _NPS_PROMOTER_MIN)
+    detractor_count = sum(c for s, c in response_count_by_score.items() if s <= _NPS_DETRACTOR_MAX)
+    total = sum(response_count_by_score.values())
+    passive_count = total - promoter_count - detractor_count
+
+    return {
+        "total_response_count": total,
+        "promoter_count": promoter_count,
+        "passive_count": passive_count,
+        "detractor_count": detractor_count,
+        "response_count_by_score": response_count_by_score,
+        "nps_score": round((promoter_count - detractor_count) / total * 100, 1) if total else None,
     }
 
 

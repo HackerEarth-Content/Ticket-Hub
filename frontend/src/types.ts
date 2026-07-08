@@ -88,6 +88,15 @@ export interface Csat {
   rating_scale_confirmed: boolean;
 }
 
+export interface Nps {
+  total_response_count: number;
+  promoter_count: number;
+  passive_count: number;
+  detractor_count: number;
+  response_count_by_score: Record<string, number>;
+  nps_score: number | null;
+}
+
 export interface AgentKpi {
   owner_id: string;
   owner_name: string | null;
@@ -362,6 +371,7 @@ export interface DashboardData {
   resolutionByPriority: ResolutionByPriority;
   sla: SlaKpis;
   csat: Csat;
+  nps: Nps;
   // Team-only (require sign-in) -- null when signed out, not just "not yet loaded".
   agents: AgentKpi[];
   aePerformance: BacklineAePerformance | null;

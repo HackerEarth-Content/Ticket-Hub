@@ -20,6 +20,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from hubspot_pipeline import pipeline
+from wootric_pipeline import pipeline as wootric_pipeline
 
 logger = structlog.get_logger(__name__)
 
@@ -36,7 +37,10 @@ async def _sync_once() -> None:
     try:
         ticket_stats = await pipeline.run_incremental()
         csat_stats = await pipeline.run_csat_incremental()
-        logger.info("incremental_sync_complete", tickets=ticket_stats, csat=csat_stats)
+        nps_stats = await wootric_pipeline.run_incremental()
+        logger.info(
+            "incremental_sync_complete", tickets=ticket_stats, csat=csat_stats, nps=nps_stats
+        )
     except Exception:
         logger.exception("incremental_sync_failed")
 

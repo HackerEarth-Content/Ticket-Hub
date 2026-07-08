@@ -102,6 +102,11 @@ async def kpis_csat(period: str = PeriodParam, session: AsyncSession = Depends(g
     return await utils.get_csat(session, period)
 
 
+@router.get("/kpis/nps")
+async def kpis_nps(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await utils.get_nps(session, period)
+
+
 @router.get("/kpis/agents")
 async def kpis_agents(
     period: str = PeriodParam,

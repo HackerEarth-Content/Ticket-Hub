@@ -13,6 +13,7 @@ from core.orm import SyncCursor
 
 TICKETS_KEY = "hubspot_tickets"
 CSAT_KEY = "hubspot_csat"
+WOOTRIC_NPS_KEY = "wootric_nps"
 
 
 async def get_cursor(key: str = TICKETS_KEY) -> datetime | None:

@@ -17,6 +17,7 @@ import type {
   LiveToday,
   ModuleDistribution,
   ModuleTickets,
+  Nps,
   Period,
   Pipelines,
   ResolutionByPriority,
@@ -80,6 +81,7 @@ export const api = {
     get<ResolutionByPriority>("/kpis/mttr", { period }),
   slaKpis: (period: Period) => get<SlaKpis>("/kpis/sla", { period }),
   csat: (period: Period) => get<Csat>("/kpis/csat", { period }),
+  nps: (period: Period) => get<Nps>("/kpis/nps", { period }),
   agents: (period: Period) => get<AgentKpi[]>("/kpis/agents", { period }),
   dataQuality: (period: Period) => get<DataQuality>("/kpis/data-quality", { period }),
   backlineOverview: (period: Period) =>

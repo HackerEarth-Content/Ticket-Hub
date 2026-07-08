@@ -24,6 +24,8 @@ from pathlib import Path
 
 from core.database import db_manager
 from hubspot_pipeline import db_writer, pipeline
+from wootric_pipeline import db_writer as wootric_db_writer
+from wootric_pipeline import pipeline as wootric_pipeline
 
 # Floor for --full -- NOT HubSpot account creation. Tickets before this date
 # were intentionally deleted from the DB (2026-07-07); a --full pull that
@@ -36,8 +38,9 @@ async def _main(since_ms: int, out: str | None, write_db: bool, incremental: boo
         await db_manager.initialize()
         ticket_stats = await pipeline.run_incremental()
         csat_stats = await pipeline.run_csat_incremental()
+        nps_stats = await wootric_pipeline.run_incremental()
         await db_manager.close()
-        print(json.dumps({"tickets": ticket_stats, "csat": csat_stats}, indent=2))
+        print(json.dumps({"tickets": ticket_stats, "csat": csat_stats, "nps": nps_stats}, indent=2))
         return
 
     tickets = await pipeline.extract(since_ms)
@@ -55,10 +58,12 @@ async def _main(since_ms: int, out: str | None, write_db: bool, incremental: boo
         # must run after the ticket upsert above.
         csat_submissions = await pipeline.extract_csat(since_ms)
         await db_writer.upsert_csat_responses(csat_submissions)
+        nps_submissions = await wootric_pipeline.extract(since_ms // 1000)
+        await wootric_db_writer.upsert_nps_responses(nps_submissions)
         await db_manager.close()
         print(
-            f"Upserted {len(tickets)} ticket(s) and {len(csat_submissions)} "
-            "CSAT response(s) into the database"
+            f"Upserted {len(tickets)} ticket(s), {len(csat_submissions)} CSAT response(s), "
+            f"and {len(nps_submissions)} NPS response(s) into the database"
         )
 
 
