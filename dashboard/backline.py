@@ -19,6 +19,18 @@ from hubspot_pipeline.stage_timing import STAGE_TIMING_STAGES
 _QA_PLATFORM_STAGE_KEY = "qa_platform"
 _ENGINEERING_STAGE_KEY = "engineering"
 
+# Every stage a backline-originated ticket can escalate into, checked in this
+# order so a ticket that hit more than one reports its furthest/first-entered
+# stop. Support/Content are frontline-side team routing, not backline itself,
+# but a backline ticket that gets kicked to one of them is still an
+# escalation past backline the same way Engineering/QA-Platform are.
+_ESCALATION_STAGE_LABELS = {
+    _ENGINEERING_STAGE_KEY: "Engineering",
+    _QA_PLATFORM_STAGE_KEY: "QA/Platform",
+    "support": "Support",
+    "content": "Content",
+}
+
 # Anomaly/uncategorized drill-down lists are capped so a bad data period
 # can't return an unbounded payload -- callers see `truncated` when it bites.
 _DRILLDOWN_LIMIT = 100
@@ -155,13 +167,13 @@ async def get_backline_escalations(session: AsyncSession, period: str) -> dict:
     now = datetime.now(timezone.utc)
     escalations = []
     for row in rows.all():
-        eng = row.stage_timings.get(_ENGINEERING_STAGE_KEY) or {}
-        qa = row.stage_timings.get(_QA_PLATFORM_STAGE_KEY) or {}
-        if eng.get("entered_at"):
-            escalation_path, timing = "Engineering", eng
-        elif qa.get("entered_at"):
-            escalation_path, timing = "QA/Platform", qa
-        else:
+        escalation_path, timing = None, None
+        for stage_key, label in _ESCALATION_STAGE_LABELS.items():
+            t = row.stage_timings.get(stage_key) or {}
+            if t.get("entered_at"):
+                escalation_path, timing = label, t
+                break
+        if escalation_path is None:
             continue
 
         entered_at = _parse_iso(timing.get("entered_at"))

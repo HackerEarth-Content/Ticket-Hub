@@ -12,6 +12,8 @@ STAGE_TIMING_STAGES: dict[str, dict[str, str]] = {
     "be_ae": {"stage_id": "1208415673", "label": "Pending on BE/AE"},
     "qa_platform": {"stage_id": "1289560323", "label": "Bugs pending on QA/Platform"},
     "engineering": {"stage_id": "70862658", "label": "Pending on Engineering"},
+    "support": {"stage_id": "1340014938", "label": "Pending on Support"},
+    "content": {"stage_id": "145535610", "label": "Pending on Content"},
 }
 
 # The two parallel entry points into backline -- a ticket enters one or the
