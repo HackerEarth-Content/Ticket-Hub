@@ -3,12 +3,12 @@ backline.py, and frontline.py."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
 from core.users import current_active_user, current_active_user_optional
-from dashboard import backline, customers, frontline, slack_issues, utils
+from dashboard import backline, customers, export, frontline, slack_issues, utils
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -210,6 +210,25 @@ async def customers_details(period: str = PeriodParam, session: AsyncSession = D
 @router.get("/slack/issues")
 async def slack_issues_route(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     return await slack_issues.get_slack_issues(session, period)
+
+
+@router.get("/export")
+async def export_workbook(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    """Excel download of the period's raw tickets + the same KPI numbers the
+    dashboard cards show -- gated behind sign-in like the other ticket-level
+    drill-downs (module/status tickets, agent KPIs), since it's row-level
+    detail with owner attribution, not the org-wide aggregate view."""
+    content = await export.build_export_workbook(session, period)
+    filename = f"helpdesk-export-{period.replace(':', '_')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/meta/sync-status")

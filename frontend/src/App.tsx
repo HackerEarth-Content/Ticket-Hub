@@ -30,6 +30,7 @@ import { ContentOnCallTable } from "./components/ContentOnCallTable";
 import { SlackReporterPieChart } from "./components/SlackReporterPieChart";
 import { SectionHeading } from "./components/SectionHeading";
 import { TabNav, type DashboardTab } from "./components/TabNav";
+import { api } from "./api";
 import { useAuth } from "./hooks/useAuth";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useLiveStatus } from "./hooks/useLiveStatus";
@@ -40,6 +41,7 @@ export default function App() {
   const [period, setPeriod] = useState<Period>("week");
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [refreshTick, setRefreshTick] = useState(0);
+  const [exporting, setExporting] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const { user, logout } = useAuth();
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
@@ -48,6 +50,21 @@ export default function App() {
   async function handleSyncNow() {
     await syncNow();
     setRefreshTick((t) => t + 1);
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const blob = await api.exportWorkbook(period);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `helpdesk-export-${period.replace(/:/g, "_")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -63,6 +80,8 @@ export default function App() {
         onToggleTheme={toggleTheme}
         user={user}
         onLogout={logout}
+        onExport={handleExport}
+        exporting={exporting}
       />
 
       {error && (

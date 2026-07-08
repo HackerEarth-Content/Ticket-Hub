@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CurrentUser, Period, SyncStatus } from "../types";
 import { formatIstTime, formatNumber, formatRelativeTime, todayIstDate } from "../format";
 
@@ -29,6 +29,8 @@ interface Props {
   onToggleTheme: () => void;
   user: CurrentUser | null;
   onLogout: () => void;
+  onExport: () => void;
+  exporting: boolean;
 }
 
 export function Header({
@@ -42,6 +44,8 @@ export function Header({
   user,
   onLogout,
   onToggleTheme,
+  onExport,
+  exporting,
 }: Props) {
   const stale = sync?.last_synced_at
     ? Date.now() - new Date(sync.last_synced_at).getTime() > 30 * 60_000
@@ -51,6 +55,19 @@ export function Header({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draftStart, setDraftStart] = useState(customRange?.[0] ?? "");
   const [draftEnd, setDraftEnd] = useState(customRange?.[1] ?? "");
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [menuOpen]);
 
   function applyCustomRange() {
     if (!draftStart || !draftEnd) return;
@@ -147,12 +164,40 @@ export function Header({
           {theme === "light" ? "🌙" : "☀️"}
         </button>
         {user ? (
-          <div className="auth-chip" title={user.email}>
-            <span className="auth-chip-avatar">{(user.name ?? user.email)[0].toUpperCase()}</span>
-            <span className="auth-chip-name">{user.name ?? user.email}</span>
-            <button className="auth-chip-signout" onClick={onLogout}>
-              Sign out
+          <div className="auth-menu-wrap" ref={menuRef}>
+            <button
+              className="auth-menu-trigger"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label={`Account menu for ${user.name ?? user.email}`}
+              aria-expanded={menuOpen}
+              title={user.email}
+            >
+              <span className="auth-chip-avatar">{(user.name ?? user.email)[0].toUpperCase()}</span>
             </button>
+            {menuOpen && (
+              <div className="auth-menu">
+                <div className="auth-menu-name">{user.name ?? user.email}</div>
+                <button
+                  className="auth-menu-item"
+                  disabled={exporting}
+                  onClick={() => {
+                    onExport();
+                    setMenuOpen(false);
+                  }}
+                >
+                  {exporting ? "⏳ Exporting…" : "⬇️ Export this period"}
+                </button>
+                <button
+                  className="auth-menu-item auth-menu-signout"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onLogout();
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <a className="signin-btn" href="/api/auth/google/login">
