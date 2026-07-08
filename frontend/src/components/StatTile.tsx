@@ -2,7 +2,7 @@ interface Props {
   label: string;
   value: string | number;
   unit?: string;
-  tone?: "default" | "warn" | "good";
+  tone?: "default" | "warn" | "good" | "critical";
   foot?: string;
 }
 
