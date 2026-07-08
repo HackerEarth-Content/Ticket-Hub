@@ -1,5 +1,7 @@
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { useState } from "react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from "recharts";
 import type { SlackReporterCounts } from "../types";
+import { formatNumber } from "../format";
 
 interface Props {
   data: SlackReporterCounts[];
@@ -72,12 +74,44 @@ function SliceTooltip({ active, payload }: any) {
   );
 }
 
+// A hovered slice grows outward slightly and picks up a matching-hue ring --
+// the same "lift on hover, flat at rest" language as .card, applied to a mark.
+function renderActiveSlice(props: any) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 5}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        cornerRadius={4}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={outerRadius + 8}
+        outerRadius={outerRadius + 10}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        opacity={0.35}
+      />
+    </g>
+  );
+}
+
 /** Part-to-whole by reporter would normally be a stacked bar (see dataviz
  * guidance), but a pie was requested specifically -- kept legible by
  * capping at 8 slices (same series-count ladder as ModuleDistributionCard)
  * and folding the long tail into "Other" rather than generating more hues. */
 export function SlackReporterPieChart({ data, loading }: Props) {
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const slices = buildSlices(data);
+  const total = slices.reduce((sum, s) => sum + s.reported_count, 0);
 
   return (
     <div className="card">
@@ -88,6 +122,7 @@ export function SlackReporterPieChart({ data, loading }: Props) {
             {slices.length > MAX_SLOTS - 1
               ? `Top ${MAX_SLOTS - 1}, tail folded into Other`
               : "Who's reporting Slack issues"}
+            {` · ${formatNumber(total)} issue${total === 1 ? "" : "s"} total`}
           </div>
         </div>
       </div>
@@ -97,28 +132,45 @@ export function SlackReporterPieChart({ data, loading }: Props) {
         <div className="card-sub">No Slack-reported issues in this period.</div>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={slices}
-                dataKey="reported_count"
-                nameKey="name"
-                outerRadius={90}
-                paddingAngle={slices.length > 1 ? 2 : 0}
-                isAnimationActive={false}
+          <div className="donut-wrap">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={slices}
+                  dataKey="reported_count"
+                  nameKey="name"
+                  innerRadius={62}
+                  outerRadius={92}
+                  paddingAngle={slices.length > 1 ? 2 : 0}
+                  cornerRadius={4}
+                  isAnimationActive={false}
+                  activeIndex={activeIndex}
+                  activeShape={renderActiveSlice}
+                  onMouseEnter={(_, i) => setActiveIndex(i)}
+                  onMouseLeave={() => setActiveIndex(undefined)}
+                >
+                  {slices.map((s) => (
+                    <Cell key={s.name} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip content={<SliceTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="pie-legend">
+            {slices.map((s, i) => (
+              <div
+                className={`pie-legend-row ${activeIndex === i ? "active" : ""}`}
+                key={s.name}
+                onMouseEnter={() => setActiveIndex(i)}
+                onMouseLeave={() => setActiveIndex(undefined)}
               >
-                {slices.map((s) => (
-                  <Cell key={s.name} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
-                ))}
-              </Pie>
-              <Tooltip content={<SliceTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="legend">
-            {slices.map((s) => (
-              <div className="item" key={s.name}>
                 <span className="sw" style={{ background: s.color }} />
-                {s.name} ({s.reported_count})
+                <span className="pie-legend-name">{s.name}</span>
+                <span className="pie-legend-count">{s.reported_count}</span>
+                <span className="pie-legend-pct">
+                  {total ? Math.round((s.reported_count / total) * 100) : 0}%
+                </span>
               </div>
             ))}
           </div>

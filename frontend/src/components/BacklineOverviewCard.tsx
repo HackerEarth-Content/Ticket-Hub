@@ -27,7 +27,7 @@ export function BacklineOverviewCard({ data, loading }: Props) {
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="card-title">Backline overview</div>
+          <div className="card-title">Overview</div>
           <div className="card-sub">All Support Pipeline tickets, this period</div>
         </div>
       </div>

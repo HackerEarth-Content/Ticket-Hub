@@ -7,7 +7,7 @@ const TABS: { key: DashboardTab; label: string; sub: string; accent: string }[] 
   { key: "frontline", label: "Frontline", sub: "Support desk", accent: "var(--accent-aqua)" },
   { key: "backline", label: "Backline", sub: "Engineering escalations", accent: "var(--accent-orange)" },
   { key: "customers", label: "Customers", sub: "By account", accent: "var(--accent-indigo)" },
-  { key: "content_oncall", label: "Content/On-call", sub: "Slack-reported issues", accent: "var(--accent-magenta)" },
+  { key: "content_oncall", label: "Slack Requests", sub: "Content/engg on-call", accent: "var(--accent-magenta)" },
 ];
 
 interface Props {

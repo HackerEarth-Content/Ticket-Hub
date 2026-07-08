@@ -75,7 +75,7 @@ export default function App() {
       <section className="live-panel">
         <div className="live-panel-head">
           <span className="live-dot" />
-          <span className="live-panel-title">Today's live updates</span>
+          <span className="live-panel-title">Live updates</span>
           <span className="live-panel-sub">
             always current &middot; independent of the date range above
           </span>
@@ -190,7 +190,7 @@ export default function App() {
 
       {tab === "content_oncall" && (
         <>
-          <SectionHeading title="Content/On-call" color="var(--accent-magenta)" />
+          <SectionHeading title="Content/engg On-call" color="var(--accent-magenta)" />
           <div style={{ marginBottom: 14 }}>
             <SlackReporterPieChart data={data?.slackIssues?.by_reporter ?? []} loading={loading} />
           </div>
