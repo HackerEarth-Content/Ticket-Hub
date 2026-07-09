@@ -217,6 +217,13 @@ async def slack_issues_route(period: str = PeriodParam, session: AsyncSession = 
     return await slack_issues.get_slack_issues(session, period)
 
 
+@router.get("/slack/workflow-issues")
+async def slack_workflow_issues_route(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
+    return await slack_issues.get_slack_workflow_breakdown(session, period)
+
+
 @router.get("/export")
 async def export_workbook(
     period: str = PeriodParam,

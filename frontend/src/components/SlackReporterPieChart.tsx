@@ -6,6 +6,8 @@ import { formatNumber } from "../format";
 interface Props {
   data: SlackReporterCounts[];
   loading: boolean;
+  title?: string;
+  emptyLabel?: string;
 }
 
 // Fixed categorical order -- validated for CVD-safe adjacency, same order
@@ -108,28 +110,35 @@ function renderActiveSlice(props: any) {
  * guidance), but a pie was requested specifically -- kept legible by
  * capping at 8 slices (same series-count ladder as ModuleDistributionCard)
  * and folding the long tail into "Other" rather than generating more hues. */
-export function SlackReporterPieChart({ data, loading }: Props) {
+export function SlackReporterPieChart({
+  data,
+  loading,
+  title = "Issues by reporter",
+  emptyLabel = "No Slack-reported issues in this period.",
+}: Props) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const slices = buildSlices(data);
   const total = slices.reduce((sum, s) => sum + s.reported_count, 0);
+  const totalSolved = slices.reduce((sum, s) => sum + s.solved_count, 0);
 
   return (
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="card-title">Issues by reporter</div>
+          <div className="card-title">{title}</div>
           <div className="card-sub">
             {slices.length > MAX_SLOTS - 1
               ? `Top ${MAX_SLOTS - 1}, tail folded into Other`
               : "Who's reporting Slack issues"}
             {` · ${formatNumber(total)} issue${total === 1 ? "" : "s"} total`}
+            {` · ${formatNumber(totalSolved)} closed`}
           </div>
         </div>
       </div>
       {loading ? (
         <div className="skeleton" style={{ height: 220, width: "100%" }} />
       ) : slices.length === 0 ? (
-        <div className="card-sub">No Slack-reported issues in this period.</div>
+        <div className="card-sub">{emptyLabel}</div>
       ) : (
         <>
           <div className="donut-wrap">

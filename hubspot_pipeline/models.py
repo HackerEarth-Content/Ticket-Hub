@@ -67,6 +67,22 @@ def _extract_reported_by(content: str | None) -> str | None:
     return match.group(1).strip() or None
 
 
+_WORKFLOW_RE = re.compile(r"^Workflow:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+
+def _extract_workflow(content: str | None) -> str | None:
+    """Newer Slack-sourced tickets embed a "Workflow: <type>" line before
+    "Reported By:" (e.g. "Content Request - Assessments 1.0", "engg oncall")
+    -- verified live 2026-07-09. Older Slack tickets predate this field and
+    have no such line; None here means "not tagged", not "no workflow"."""
+    if not content:
+        return None
+    match = _WORKFLOW_RE.search(content)
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
+
 class DashboardTicket(BaseModel):
     """A HubSpot ticket normalized for dashboard KPIs/charts."""
 
@@ -94,6 +110,7 @@ class DashboardTicket(BaseModel):
     owner_assigned_at: str | None  # hubspot_owner_assigneddate, ISO string
     source_type: str | None
     reporter_contact_name: str | None  # parsed from ticket content, see _extract_reported_by
+    slack_workflow: str | None  # parsed from ticket content, see _extract_workflow
 
     created_at: str | None        # createdate, ISO string
     closed_at: str | None         # closed_date, ISO string
@@ -179,6 +196,9 @@ class DashboardTicket(BaseModel):
             # not signal.
             reporter_contact_name=(
                 _extract_reported_by(props.get("content")) if source_type == "Slack" else None
+            ),
+            slack_workflow=(
+                _extract_workflow(props.get("content")) if source_type == "Slack" else None
             ),
             created_at=props.get("createdate"),
             closed_at=props.get("closed_date"),

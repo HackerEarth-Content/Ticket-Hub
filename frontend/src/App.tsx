@@ -212,8 +212,19 @@ export default function App() {
       {tab === "content_oncall" && (
         <>
           <SectionHeading title="Content/engg On-call" color="var(--accent-magenta)" />
-          <div style={{ marginBottom: 14 }}>
-            <SlackReporterPieChart data={data?.slackIssues?.by_reporter ?? []} loading={loading} />
+          <div className="grid cols-2" style={{ marginBottom: 14 }}>
+            <SlackReporterPieChart
+              data={data?.slackWorkflowIssues?.content.by_reporter ?? []}
+              loading={loading}
+              title="Content issues by reporter"
+              emptyLabel="No Content-workflow issues in this period."
+            />
+            <SlackReporterPieChart
+              data={data?.slackWorkflowIssues?.engg_oncall.by_reporter ?? []}
+              loading={loading}
+              title="Engg Oncall issues by reporter"
+              emptyLabel="No Engg Oncall-workflow issues in this period."
+            />
           </div>
           <ContentOnCallTable data={data?.slackIssues ?? null} loading={loading} />
         </>
@@ -221,8 +232,7 @@ export default function App() {
 
       <footer className="note">
         <span>
-          Source: HubSpot Support &middot; GT Support &middot; Customer Success &middot;
-          Marketing pipelines, synced via <code>hubspot_pipeline</code>
+          Source: HubSpot Support &middot; synced via <code>hubspot_pipeline</code>
         </span>
       </footer>
     </div>

@@ -184,11 +184,32 @@ export interface SlackReporterCounts {
   solved_count: number;
 }
 
+export interface SlackWorkflowTicketGroup {
+  count: number;
+  tickets: SlackIssue[];
+  truncated: boolean;
+}
+
 export interface SlackIssues {
   issue_count: number;
   issues: SlackIssue[];
   truncated: boolean;
   by_reporter: SlackReporterCounts[];
+  tickets_by_workflow_category: {
+    content: SlackWorkflowTicketGroup;
+    engg_oncall: SlackWorkflowTicketGroup;
+    uncategorized: SlackWorkflowTicketGroup;
+  };
+}
+
+export interface SlackWorkflowBucket {
+  issue_count: number;
+  by_reporter: SlackReporterCounts[];
+}
+
+export interface SlackWorkflowIssues {
+  content: SlackWorkflowBucket;
+  engg_oncall: SlackWorkflowBucket;
 }
 
 export interface StageTimingEntry {
@@ -381,6 +402,7 @@ export interface DashboardData {
   moduleTickets: ModuleTickets | null;
   statusTickets: StatusTickets | null;
   slackIssues: SlackIssues | null;
+  slackWorkflowIssues: SlackWorkflowIssues;
 
   dataQuality: DataQuality;
   stageTiming: BacklineStageTiming;

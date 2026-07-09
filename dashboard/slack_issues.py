@@ -17,12 +17,33 @@ from dashboard.utils import resolve_period
 _DRILLDOWN_LIMIT = 100
 
 
+def _classify_workflow(slack_workflow: str | None) -> str | None:
+    """Buckets the raw "Workflow: <type>" line into one of the two types
+    tracked on the dashboard. Returns None for anything else -- including
+    tickets with no Workflow line at all (they predate this field) -- so
+    callers decide whether that means "uncategorized" (get_slack_issues'
+    table) or "drop it" (get_slack_workflow_breakdown's pie charts)."""
+    if not slack_workflow:
+        return None
+    value = slack_workflow.lower()
+    if "content" in value:
+        return "content"
+    if "oncall" in value or "engg" in value:
+        return "engg_oncall"
+    return None
+
+
 async def get_slack_issues(session: AsyncSession, period: str) -> dict:
     """One row per Slack-sourced ticket: who reported it, who it's assigned
     to, and its stage (e.g. "Pending on Content (Support Pipeline)", not the
     coarser canonical_status). "Reporter" is parsed from the ticket
     description's "Reported By:" line (see models._extract_reported_by),
     falling back to the assigned owner when that line is missing.
+
+    tickets_by_workflow_category splits the same tickets by the "Workflow:"
+    line (see _classify_workflow) for the Content/Engg Oncall table filter --
+    "uncategorized" here means no recognized Workflow line, shown separately
+    rather than dropped (unlike get_slack_workflow_breakdown's pie charts).
     """
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
@@ -34,6 +55,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             Ticket.stage_label,
             Ticket.canonical_status,
             Ticket.created_at,
+            Ticket.slack_workflow,
         )
         .where(
             Ticket.created_at.between(period_start, period_end),
@@ -44,6 +66,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
 
     issues = []
     by_reporter: dict[str, dict] = {}
+    issues_by_category: dict[str, list[dict]] = {"content": [], "engg_oncall": [], "uncategorized": []}
     for (
         ticket_id,
         subject,
@@ -52,9 +75,10 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         stage_label,
         canonical_status,
         created_at,
+        slack_workflow,
     ) in rows.all():
         reporter_name = reporter_contact_name or owner_name or "Unassigned"
-        issues.append({
+        issue = {
             "ticket_id": ticket_id,
             "subject": subject,
             "reporter_name": reporter_name,
@@ -62,7 +86,9 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             "owner_name": owner_name,
             "stage_label": stage_label,
             "created_at": created_at.isoformat() if created_at else None,
-        })
+        }
+        issues.append(issue)
+        issues_by_category[_classify_workflow(slack_workflow) or "uncategorized"].append(issue)
 
         # Aggregated across every matching ticket, not just the truncated
         # page below -- a chart summarizing "who reports issues" shouldn't
@@ -71,6 +97,14 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         bucket["reported_count"] += 1
         if canonical_status == "Resolved":
             bucket["solved_count"] += 1
+
+    def _category_group(category: str) -> dict:
+        category_issues = issues_by_category[category]
+        return {
+            "count": len(category_issues),
+            "tickets": category_issues[:_DRILLDOWN_LIMIT],
+            "truncated": len(category_issues) > _DRILLDOWN_LIMIT,
+        }
 
     truncated = len(issues) > _DRILLDOWN_LIMIT
     return {
@@ -85,4 +119,60 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             key=lambda r: r["reported_count"],
             reverse=True,
         ),
+        "tickets_by_workflow_category": {
+            "content": _category_group("content"),
+            "engg_oncall": _category_group("engg_oncall"),
+            "uncategorized": _category_group("uncategorized"),
+        },
+    }
+
+
+async def get_slack_workflow_breakdown(session: AsyncSession, period: str) -> dict:
+    """Reporter breakdown for the two Slack ticket-creation workflows
+    (Content Request, Engg On-call), for the two pie charts on the
+    Content/engg On-call tab. Tickets with no recognized Workflow line --
+    including the legacy Slack tickets that predate this field -- are
+    dropped from both buckets rather than shown as "uncategorized" (see
+    _classify_workflow)."""
+    period_start, period_end = resolve_period(period)
+    rows = await session.execute(
+        select(
+            Ticket.slack_workflow,
+            Ticket.reporter_contact_name,
+            Ticket.owner_name,
+            Ticket.canonical_status,
+        ).where(
+            Ticket.created_at.between(period_start, period_end),
+            Ticket.source_type == "Slack",
+        )
+    )
+
+    by_reporter: dict[str, dict[str, dict]] = {"content": {}, "engg_oncall": {}}
+    for slack_workflow, reporter_contact_name, owner_name, canonical_status in rows.all():
+        bucket = _classify_workflow(slack_workflow)
+        if bucket is None:
+            continue
+        reporter_name = reporter_contact_name or owner_name or "Unassigned"
+        counts = by_reporter[bucket].setdefault(reporter_name, {"reported_count": 0, "solved_count": 0})
+        counts["reported_count"] += 1
+        if canonical_status == "Resolved":
+            counts["solved_count"] += 1
+
+    def _bucket_result(bucket: str) -> dict:
+        reporters = sorted(
+            (
+                {"reporter_name": name, **counts}
+                for name, counts in by_reporter[bucket].items()
+            ),
+            key=lambda r: r["reported_count"],
+            reverse=True,
+        )
+        return {
+            "issue_count": sum(r["reported_count"] for r in reporters),
+            "by_reporter": reporters,
+        }
+
+    return {
+        "content": _bucket_result("content"),
+        "engg_oncall": _bucket_result("engg_oncall"),
     }

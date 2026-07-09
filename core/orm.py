@@ -68,6 +68,7 @@ class Ticket(Base):
     owner_assigned_at: Mapped[datetime | None]
     source_type: Mapped[str | None]
     reporter_contact_name: Mapped[str | None]
+    slack_workflow: Mapped[str | None]
 
     created_at: Mapped[datetime | None] = mapped_column(index=True)
     closed_at: Mapped[datetime | None]
