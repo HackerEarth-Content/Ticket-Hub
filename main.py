@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from core.database import db_manager
 from core.users import fastapi_users
-from hubspot_pipeline.scheduler import start_scheduler
+from core.scheduler import start_scheduler
 
 from api.dashboard_routes import router as dashboard_router
 from api.auth_routes import router as auth_router

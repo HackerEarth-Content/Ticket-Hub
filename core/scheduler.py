@@ -25,7 +25,7 @@ from wootric_pipeline import pipeline as wootric_pipeline
 logger = structlog.get_logger(__name__)
 
 _INTERVAL_MINUTES = 5
-_JOB_ID = "hubspot_incremental_sync"
+_JOB_ID = "incremental_sync"
 
 
 async def _sync_once() -> None:

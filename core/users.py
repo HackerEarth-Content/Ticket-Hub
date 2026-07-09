@@ -1,6 +1,9 @@
+import os
+from pathlib import Path
 from typing import Any
 
-from fastapi import Depends
+from dotenv import dotenv_values
+from fastapi import Depends, HTTPException, Request
 from fastapi_users import BaseUserManager, FastAPIUsers
 from fastapi.responses import RedirectResponse
 from fastapi_users.authentication import (
@@ -16,6 +19,23 @@ from core.database import get_session
 from core.orm import User, OAuthAccount
 
 SECRET = settings.USER_SECRET
+
+
+_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+
+
+def _is_email_allowed(email: str) -> bool:
+    """Reads ALLOWED_EMAILS fresh from .env on every call instead of the
+    cached `settings` singleton, so editing the allowlist takes effect on the
+    next login attempt -- no process restart needed. Falls back to the
+    process environment if .env isn't present (e.g. vars injected directly
+    into the container instead of a mounted file -- that path still needs a
+    restart to pick up changes)."""
+    raw = dotenv_values(_ENV_PATH).get("ALLOWED_EMAILS") or os.environ.get("ALLOWED_EMAILS", "")
+    allowed = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    if not allowed:
+        return True
+    return email.strip().lower() in allowed
 
 
 class CustomGoogleOAuth2(GoogleOAuth2):
@@ -41,10 +61,39 @@ class UserManager(BaseUserManager[User, str]):
     def parse_id(self, value: Any) -> str:
         return str(value)
 
-    async def oauth_callback(self, *args, **kwargs):
-        print(f"OAuth callback started with args: {args}, kwargs: {kwargs}")
+    async def oauth_callback(
+        self,
+        oauth_name: str,
+        access_token: str,
+        account_id: str,
+        account_email: str,
+        expires_at: int | None = None,
+        refresh_token: str | None = None,
+        request: Request | None = None,
+        *,
+        associate_by_email: bool = False,
+        is_verified_by_default: bool = False,
+    ):
+        if not _is_email_allowed(account_email):
+            print(f"OAuth callback rejected: {account_email} is not on the allowlist")
+            raise HTTPException(
+                status_code=403,
+                detail="This Google account isn't authorized to access this dashboard.",
+            )
+
+        print(f"OAuth callback started for {account_email}")
         try:
-            result = await super().oauth_callback(*args, **kwargs)
+            result = await super().oauth_callback(
+                oauth_name,
+                access_token,
+                account_id,
+                account_email,
+                expires_at,
+                refresh_token,
+                request,
+                associate_by_email=associate_by_email,
+                is_verified_by_default=is_verified_by_default,
+            )
 
             # If the user doesn't have a name, extract it from the email
             if not result.name and result.email:

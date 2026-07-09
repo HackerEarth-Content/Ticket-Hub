@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     API_BASE_URL: str = "http://localhost:8000"
     ENVIRONMENT: str = "development"
 
+    # Comma-separated Google account emails allowed to sign in. Empty means
+    # anyone with a Google account can sign in (current/dev behavior).
+    ALLOWED_EMAILS: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="allow"
     )
