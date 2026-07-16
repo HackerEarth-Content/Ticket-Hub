@@ -44,12 +44,12 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
               foot="of actionable, resolved"
             />
             <StatTile
-              label="Resolved over 48h"
-              value={formatNumber(summary.tickets_resolved_over_48_hours_count)}
+              label="Resolved within 48h"
+              value={formatNumber(summary.tickets_resolved_within_48_hours_count)}
               foot={
                 summary.tickets_resolved_count
                   ? `${(
-                      (100 * summary.tickets_resolved_over_48_hours_count) /
+                      (100 * summary.tickets_resolved_within_48_hours_count) /
                       summary.tickets_resolved_count
                     ).toFixed(0)}% of resolved`
                   : undefined

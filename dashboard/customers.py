@@ -132,11 +132,15 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         .where(*scoped)
         .group_by(Ticket.customer_name, Ticket.derived_priority)
     )
+    # Closed/resolution SLA, not Ticket.sla_met -- that field is actually the
+    # first-response SLA flag (verified live 2026-07-09: perfectly correlated
+    # with sla_first_response_status, not sla_close_status), so it silently
+    # mislabeled this "Closed SLA compliance" column as first-response data.
     sla_rows = await session.execute(
         select(
             Ticket.customer_name,
-            func.count().filter(Ticket.sla_met.is_(True)),
-            func.count().filter(Ticket.sla_met.is_(False)),
+            func.count().filter(Ticket.sla_close_status == "Completed on time"),
+            func.count().filter(Ticket.sla_close_status == "Completed late"),
         )
         .where(*scoped)
         .group_by(Ticket.customer_name)

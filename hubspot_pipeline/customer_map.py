@@ -14,15 +14,28 @@ from __future__ import annotations
 # agent per ticket) never has this problem.
 _INTERNAL_NAMES = frozenset({"hackerearth"})
 
+# blackops_account_name's dropdown includes a literal "Others" option --
+# picked when the real account isn't in the dropdown list, with the actual
+# name typed into other_blackops_account_name instead. Verified live
+# 2026-07-09: every "Others"-dropdown ticket sampled had a real company name
+# in other_blackops_account_name (e.g. "Photon", "Totum7"), so treating
+# "Others" as truthy silently discarded it.
+_BLACKOPS_OTHERS_VALUE = "others"
+
 
 def resolve_customer_name(props: dict) -> str | None:
     """blackops_account_name (dropdown) -> other_blackops_account_name
-    (free-text fallback when not in the dropdown) -> hs_primary_company_name
-    (native HubSpot company association). Different sources can spell the
-    same account differently (e.g. "Loyalty Juggernaut Inc" vs "...India") --
-    no fuzzy-matching dedup here, that's a known limitation, not a bug."""
+    (free-text fallback when not in the dropdown, or when the dropdown value
+    is the "Others" placeholder) -> hs_primary_company_name (native HubSpot
+    company association). Different sources can spell the same account
+    differently (e.g. "Loyalty Juggernaut Inc" vs "...India") -- no
+    fuzzy-matching dedup here, that's a known limitation, not a bug."""
+    blackops_name = props.get("blackops_account_name")
+    if blackops_name and blackops_name.strip().casefold() == _BLACKOPS_OTHERS_VALUE:
+        blackops_name = None
+
     name = (
-        props.get("blackops_account_name")
+        blackops_name
         or props.get("other_blackops_account_name")
         or props.get("hs_primary_company_name")
         or None

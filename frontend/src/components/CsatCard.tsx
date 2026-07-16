@@ -10,9 +10,9 @@ interface Props {
 // Confirmed via HubSpot's hs_response_group on the CSAT survey (see
 // dashboard/utils.py's get_csat): 0=Detractor, 1=Passive, 2=Promoter.
 const RATING_LABELS: Record<string, string> = {
-  "0": "Dissatisfied",
+  "0": "Unhappy",
   "1": "Neutral",
-  "2": "Satisfied",
+  "2": "Happy",
 };
 
 export function CsatCard({ csat, loading }: Props) {

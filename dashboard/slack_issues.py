@@ -56,6 +56,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             Ticket.canonical_status,
             Ticket.created_at,
             Ticket.slack_workflow,
+            Ticket.derived_priority,
         )
         .where(
             Ticket.created_at.between(period_start, period_end),
@@ -66,6 +67,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
 
     issues = []
     by_reporter: dict[str, dict] = {}
+    priority_counts: dict[str, int] = {}
     issues_by_category: dict[str, list[dict]] = {"content": [], "engg_oncall": [], "uncategorized": []}
     for (
         ticket_id,
@@ -76,6 +78,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         canonical_status,
         created_at,
         slack_workflow,
+        derived_priority,
     ) in rows.all():
         reporter_name = reporter_contact_name or owner_name or "Unassigned"
         issue = {
@@ -86,6 +89,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             "owner_name": owner_name,
             "stage_label": stage_label,
             "created_at": created_at.isoformat() if created_at else None,
+            "priority": derived_priority,
         }
         issues.append(issue)
         issues_by_category[_classify_workflow(slack_workflow) or "uncategorized"].append(issue)
@@ -97,6 +101,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         bucket["reported_count"] += 1
         if canonical_status == "Resolved":
             bucket["solved_count"] += 1
+        priority_counts[derived_priority] = priority_counts.get(derived_priority, 0) + 1
 
     def _category_group(category: str) -> dict:
         category_issues = issues_by_category[category]
@@ -111,6 +116,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         "issue_count": len(issues),
         "issues": issues[:_DRILLDOWN_LIMIT],
         "truncated": truncated,
+        "issue_count_by_priority": priority_counts,
         "by_reporter": sorted(
             (
                 {"reporter_name": name, **counts}

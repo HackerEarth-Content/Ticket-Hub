@@ -28,6 +28,7 @@ import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
+import { SlackPriorityCard } from "./components/SlackPriorityCard";
 import { SlackReporterPieChart } from "./components/SlackReporterPieChart";
 import { SectionHeading } from "./components/SectionHeading";
 import { TabNav, type DashboardTab } from "./components/TabNav";
@@ -144,15 +145,22 @@ export default function App() {
           </div>
 
           <SectionHeading title="Service Health" color="var(--accent-magenta)" />
-          <div className="grid cols-3">
+          <div className="grid cols-2" style={{ marginBottom: 14 }}>
             <CsatCard csat={data?.csat ?? null} loading={loading} />
-            <NpsCard nps={data?.nps ?? null} loading={loading} />
             <DataQualityCard
               dataQuality={data?.dataQuality ?? null}
               uncategorized={data?.uncategorized ?? null}
               loading={loading}
             />
           </div>
+
+          <SectionHeading title="NPS" color="var(--accent-green)" />
+          <NpsCard
+            nps={data?.nps ?? null}
+            loading={loading}
+            topCustomerNames={data?.customerVolume?.top_customers.map((c) => c.customer_name) ?? []}
+            onNavigateToCustomer={() => setTab("customers")}
+          />
         </>
       )}
 
@@ -226,7 +234,12 @@ export default function App() {
               emptyLabel="No Engg Oncall-workflow issues in this period."
             />
           </div>
-          <ContentOnCallTable data={data?.slackIssues ?? null} loading={loading} />
+          <SectionHeading title="Priority" color="var(--accent-yellow)" />
+          <SlackPriorityCard data={data?.slackIssues ?? null} loading={loading} />
+
+          <div style={{ marginTop: 14 }}>
+            <ContentOnCallTable data={data?.slackIssues ?? null} loading={loading} />
+          </div>
         </>
       )}
 

@@ -15,6 +15,9 @@ export function CustomerOverviewCard({ data, loading }: Props) {
   const coveragePct = data && data.total_ticket_count
     ? (data.identified_ticket_count / data.total_ticket_count) * 100
     : null;
+  const noAccountPct = data && data.total_ticket_count
+    ? (data.no_account_ticket_count / data.total_ticket_count) * 100
+    : null;
 
   return (
     <div className="card" style={{ marginBottom: 14 }}>
@@ -45,15 +48,15 @@ export function CustomerOverviewCard({ data, loading }: Props) {
               foot={`${formatNumber(data.identified_ticket_count)} tickets`}
             />
             <StatTile
-              label="Account-identified"
+              label="Customer Tickets"
               value={formatPercent(coveragePct)}
               tone={coveragePct !== null && coveragePct < 10 ? "warn" : "default"}
               foot="of all tickets"
             />
             <StatTile
-              label="No account on file"
-              value={formatNumber(data.no_account_ticket_count)}
-              foot="individual candidates, mostly"
+              label="Candidate Tickets"
+              value={formatPercent(noAccountPct)}
+              foot={`${formatNumber(data.no_account_ticket_count)} tickets — individual candidates, mostly`}
             />
           </>
         )}

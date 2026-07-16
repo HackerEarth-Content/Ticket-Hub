@@ -7,7 +7,7 @@ interface Props {
   loading: boolean;
 }
 
-function IssueTable({ rows }: { rows: SlackIssue[] }) {
+export function IssueTable({ rows }: { rows: SlackIssue[] }) {
   return (
     <div className="tbl-wrap">
       <table>
@@ -16,6 +16,7 @@ function IssueTable({ rows }: { rows: SlackIssue[] }) {
             <th>Ticket</th>
             <th>Reported by</th>
             <th>Assigned to</th>
+            <th>Priority</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -35,6 +36,7 @@ function IssueTable({ rows }: { rows: SlackIssue[] }) {
                 )}
               </td>
               <td>{issue.owner_name ?? "—"}</td>
+              <td>{issue.priority}</td>
               <td>{issue.stage_label}</td>
             </tr>
           ))}

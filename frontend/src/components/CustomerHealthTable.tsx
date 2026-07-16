@@ -38,7 +38,7 @@ export function CustomerHealthTable({ data, loading }: Props) {
             <thead>
               <tr>
                 <th>Customer</th>
-                <th className="num">SLA compliance</th>
+                <th className="num">Closed SLA compliance</th>
                 <th className="num">Median first response</th>
                 <th className="num">Median resolution</th>
                 <th className="num">Escalated</th>

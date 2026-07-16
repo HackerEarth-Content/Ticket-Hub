@@ -716,6 +716,67 @@ h1 {
   background: var(--surface-2);
 }
 
+/* ---- bar list + pie chart side by side, with a click-to-reveal
+   drilldown below -- shared by NpsCard and SlackPriorityCard. ---- */
+.chart-columns {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.chart-columns > .chart-col-list {
+  flex: 1 1 240px;
+}
+.chart-columns > .chart-col-chart {
+  flex: 1 1 280px;
+}
+.chart-drilldown {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+.chart-drilldown-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.chart-drilldown table {
+  background: transparent;
+}
+.chart-drilldown td,
+.chart-drilldown th {
+  border-bottom-color: var(--line);
+}
+.chart-drilldown-close {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.chart-drilldown-close:hover {
+  color: var(--ink);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chart-drilldown {
+    animation: chart-drilldown-in 0.18s ease;
+  }
+}
+@keyframes chart-drilldown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ---- tables ---- */
 .tbl-wrap {
   overflow-x: auto;

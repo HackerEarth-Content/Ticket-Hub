@@ -212,17 +212,18 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
             Ticket.closed_at.between(period_start, period_end)
         )
     )
-    resolved_over_48_hours_count = await session.scalar(
+    resolved_within_48_hours_count = await session.scalar(
         select(func.count()).where(
             Ticket.closed_at.between(period_start, period_end),
-            _resolution_time_hours_expr() > 48,
+            _resolution_time_hours_expr() <= 48,
         )
     )
 
     # Resolution SLA Compliance per the reference frontline report's TTR
     # group: actionable tickets resolved within 3 days (72h), out of all
-    # actionable tickets resolved in the period -- a 48h staleness flag
-    # (above) is a different signal from this named SLA target.
+    # actionable tickets resolved in the period -- resolved-within-48h
+    # (above) is a different, faster-turnaround signal from this named SLA
+    # target.
     actionable_resolved = _actionable_and_resolved() & Ticket.closed_at.between(
         period_start, period_end
     )
@@ -245,7 +246,7 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
         "mean_resolution_time_hours": (
             round(mean_resolution_time_hours, 1) if mean_resolution_time_hours is not None else None
         ),
-        "tickets_resolved_over_48_hours_count": resolved_over_48_hours_count or 0,
+        "tickets_resolved_within_48_hours_count": resolved_within_48_hours_count or 0,
         "resolution_within_72_hours_percentage": _percentage(
             actionable_resolved_within_72_hours_count, actionable_resolved_count
         ),
@@ -462,10 +463,10 @@ async def get_median_resolution_time_by_priority(session: AsyncSession, period: 
 async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
 
-    async def _breakdown(column) -> dict:
+    async def _breakdown(column, *extra_filters) -> dict:
         rows = await session.execute(
             select(column, func.count())
-            .where(Ticket.created_at.between(period_start, period_end), column.isnot(None))
+            .where(Ticket.created_at.between(period_start, period_end), column.isnot(None), *extra_filters)
             .group_by(column)
         )
         return dict(rows.all())
@@ -474,7 +475,13 @@ async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
         evaluated = breakdown.get("Completed on time", 0) + breakdown.get("Completed late", 0)
         return _percentage(breakdown.get("Completed late", 0), evaluated)
 
-    first_response_status_breakdown = await _breakdown(Ticket.sla_first_response_status)
+    # Automation-closed tickets never get a human first reply, so HubSpot's
+    # own sla_first_response_status defaults them to "Overdue" -- a data
+    # artifact, not a real service failure. Excluded here only; the
+    # resolution/close SLA is still legitimate for these (they did close).
+    first_response_status_breakdown = await _breakdown(
+        Ticket.sla_first_response_status, Ticket.resolution_bucket != "Automation"
+    )
     resolution_status_breakdown = await _breakdown(Ticket.sla_close_status)
 
     return {
@@ -551,6 +558,14 @@ _NPS_PROMOTER_MIN = 9
 _NPS_DETRACTOR_MAX = 6
 
 
+def _nps_bucket(score: int) -> str:
+    if score >= _NPS_PROMOTER_MIN:
+        return "promoter"
+    if score <= _NPS_DETRACTOR_MAX:
+        return "detractor"
+    return "passive"
+
+
 async def get_nps(session: AsyncSession, period: str) -> dict:
     """Net Promoter Score from Wootric survey responses: promoters
     (score 9-10) minus detractors (score 0-6), as a percentage of total
@@ -558,18 +573,45 @@ async def get_nps(session: AsyncSession, period: str) -> dict:
     Excludes responses Wootric flagged excluded_from_calculations
     (spam/test submissions). Unlike get_csat, this isn't ticket-matched --
     NPS is a relationship-level survey -- so it's scoped by the response's
-    own created_at, not a ticket's."""
+    own created_at, not a ticket's.
+
+    responses_by_bucket is the drill-down behind the promoter/passive/
+    detractor numbers and the distribution pie chart: one row per response,
+    newest first, with the account name pulled straight off the "company"
+    end-user property Wootric already stores in `properties` (verified live
+    2026-07-13, populated on 76/77 responses) -- aggregated in Python rather
+    than a JSONB path query, same convention as the stage_timings blob
+    (see backline.py). There's no ticket_id here (unlike get_csat) -- NPS
+    isn't ticket-matched -- so email/text are what the frontend can act on
+    (mailto the respondent, read their comment)."""
     period_start, period_end = resolve_period(period)
 
     rows = await session.execute(
-        select(NpsResponse.score, func.count())
+        select(
+            NpsResponse.response_id,
+            NpsResponse.score,
+            NpsResponse.email,
+            NpsResponse.text,
+            NpsResponse.properties,
+        )
         .where(
             NpsResponse.created_at.between(period_start, period_end),
             NpsResponse.excluded_from_calculations.is_(False),
         )
-        .group_by(NpsResponse.score)
+        .order_by(NpsResponse.created_at.desc())
     )
-    response_count_by_score = dict(rows.all())
+
+    response_count_by_score: dict[int, int] = {}
+    responses_by_bucket: dict[str, list[dict]] = {"promoter": [], "passive": [], "detractor": []}
+    for response_id, score, email, text, properties in rows.all():
+        response_count_by_score[score] = response_count_by_score.get(score, 0) + 1
+        responses_by_bucket[_nps_bucket(score)].append({
+            "response_id": response_id,
+            "account_name": (properties or {}).get("company") or "Unknown",
+            "score": score,
+            "email": email,
+            "text": text,
+        })
 
     promoter_count = sum(c for s, c in response_count_by_score.items() if s >= _NPS_PROMOTER_MIN)
     detractor_count = sum(c for s, c in response_count_by_score.items() if s <= _NPS_DETRACTOR_MAX)
@@ -583,6 +625,7 @@ async def get_nps(session: AsyncSession, period: str) -> dict:
         "detractor_count": detractor_count,
         "response_count_by_score": response_count_by_score,
         "nps_score": round((promoter_count - detractor_count) / total * 100, 1) if total else None,
+        "responses_by_bucket": responses_by_bucket,
     }
 
 

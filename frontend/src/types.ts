@@ -24,7 +24,7 @@ export interface Summary {
   tickets_resolved_count: number;
   median_resolution_time_hours: number | null;
   mean_resolution_time_hours: number | null;
-  tickets_resolved_over_48_hours_count: number;
+  tickets_resolved_within_48_hours_count: number;
   resolution_within_72_hours_percentage: number | null;
 }
 
@@ -88,6 +88,16 @@ export interface Csat {
   rating_scale_confirmed: boolean;
 }
 
+export type NpsBucket = "promoter" | "passive" | "detractor";
+
+export interface NpsResponseDetail {
+  response_id: string;
+  account_name: string;
+  score: number;
+  email: string | null;
+  text: string | null;
+}
+
 export interface Nps {
   total_response_count: number;
   promoter_count: number;
@@ -95,6 +105,7 @@ export interface Nps {
   detractor_count: number;
   response_count_by_score: Record<string, number>;
   nps_score: number | null;
+  responses_by_bucket: Record<NpsBucket, NpsResponseDetail[]>;
 }
 
 export interface AgentKpi {
@@ -176,6 +187,7 @@ export interface SlackIssue {
   owner_name: string | null;
   stage_label: string;
   created_at: string | null;
+  priority: string;
 }
 
 export interface SlackReporterCounts {
@@ -194,6 +206,7 @@ export interface SlackIssues {
   issue_count: number;
   issues: SlackIssue[];
   truncated: boolean;
+  issue_count_by_priority: Record<string, number>;
   by_reporter: SlackReporterCounts[];
   tickets_by_workflow_category: {
     content: SlackWorkflowTicketGroup;

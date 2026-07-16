@@ -15,7 +15,6 @@ from core.orm import Ticket
 from dashboard.utils import (
     _actionable_and_resolved,
     _FRT_SLA_HOURS,
-    _OPEN_STATUSES,
     _percentage,
     _utc_iso,
     resolve_period,
@@ -24,6 +23,14 @@ from hubspot_pipeline.resolution_map import UNRESOLVED_BUCKET
 
 # A ticket counts as "resolved within a day" for the FCR-quality metric.
 _FCR_FAST_RESOLUTION_HOURS = 24
+
+# Stages counted as "still awaiting a reply, past SLA" -- both are the
+# Support Pipeline's pre-close email stages (canonical_status "Closing"),
+# narrowed from every open/closing stage per 2026-07-09 request: a ticket
+# sitting in New/Open/Pending (or "Bugs reviewed", also "Closing") isn't what
+# this metric should flag, only ones stalled waiting on a reminder/closure
+# email.
+_AWAITING_REPLY_STAGES = ("Pending", "Reminder Email to be Sent", "Closure Email to be Sent")
 
 # Anomaly/uncategorized drill-down lists are capped so a bad data period
 # can't return an unbounded payload -- callers see `truncated` when it bites.
@@ -46,7 +53,7 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
     still_waiting_overdue = (
         Ticket.actionable.is_(True)
         & Ticket.time_to_first_agent_reply_hours.is_(None)
-        & Ticket.canonical_status.in_(_OPEN_STATUSES)
+        & Ticket.stage_label.in_(_AWAITING_REPLY_STAGES)
         & (func.extract("epoch", func.now() - Ticket.created_at) / 3600 > _FRT_SLA_HOURS)
     )
 

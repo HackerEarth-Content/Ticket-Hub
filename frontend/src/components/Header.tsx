@@ -81,7 +81,7 @@ export function Header({
         <div className="mark">H</div>
         <div>
           <div className="eyebrow">HackerEarth &middot; Support</div>
-          <h1>Helpdesk Operations</h1>
+          <h1>Ticket Hub</h1>
         </div>
       </div>
       <div className="toolbar">

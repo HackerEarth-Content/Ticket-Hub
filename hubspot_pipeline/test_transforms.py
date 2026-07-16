@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from hubspot_pipeline.category_map import resolve_module, split_categories
+from hubspot_pipeline.customer_map import resolve_customer_name
 from hubspot_pipeline.models import _ms_to_hours, _sla_met, _to_bool
 from hubspot_pipeline.pipeline import _match_ticket
 from hubspot_pipeline.priority import derive_priority
@@ -95,6 +96,19 @@ def test_sla_met():
     assert _sla_met("") is None
 
 
+def test_resolve_customer_name():
+    # "Others" dropdown value -> falls through to the free-text field.
+    assert resolve_customer_name({"blackops_account_name": "Others", "other_blackops_account_name": "Photon"}) == "Photon"
+    assert resolve_customer_name({"blackops_account_name": "others"}) is None  # no fallback available
+    # Real dropdown value wins outright.
+    assert resolve_customer_name({"blackops_account_name": "Nokia", "other_blackops_account_name": "Ignored"}) == "Nokia"
+    # hs_primary_company_name only used when both blackops fields are empty.
+    assert resolve_customer_name({"hs_primary_company_name": "Acme"}) == "Acme"
+    # HackerEarth's own CRM association never counts as a customer.
+    assert resolve_customer_name({"hs_primary_company_name": "HackerEarth"}) is None
+    assert resolve_customer_name({}) is None
+
+
 def test_match_ticket():
     submitted_at = datetime(2026, 7, 6, 12, 0, tzinfo=timezone.utc)
     ticket_info = {
@@ -120,5 +134,6 @@ if __name__ == "__main__":
     test_ms_to_hours()
     test_to_bool()
     test_sla_met()
+    test_resolve_customer_name()
     test_match_ticket()
     print("All transform checks passed.")
