@@ -202,6 +202,19 @@ async def customers_volume(period: str = PeriodParam, session: AsyncSession = De
     return await customers.get_customer_ticket_volume(session, period)
 
 
+@router.get("/customers/export")
+async def customers_export(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    """Excel of per-customer issue counts -- same aggregate the Customers tab
+    shows, so it shares that tab's (open) gating rather than /export's."""
+    content = await export.build_customer_counts_workbook(session, period)
+    filename = f"customer-issues-{period.replace(':', '_')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/customers/status")
 async def customers_status(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     return await customers.get_customer_status_breakdown(session, period)

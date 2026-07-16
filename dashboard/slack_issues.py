@@ -44,6 +44,12 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
     line (see _classify_workflow) for the Content/Engg Oncall table filter --
     "uncategorized" here means no recognized Workflow line, shown separately
     rather than dropped (unlike get_slack_workflow_breakdown's pie charts).
+
+    priority_by_team / priority_by_channel are the same priority histogram
+    sliced by team ("content"/"engg_oncall"/"uncategorized") and by Slack
+    channel ("Unknown" when no Channel line, see _extract_channel) -- they
+    feed the priority chart's filter dropdown, computed server-side so counts
+    stay correct past the drilldown cap.
     """
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
@@ -56,6 +62,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             Ticket.canonical_status,
             Ticket.created_at,
             Ticket.slack_workflow,
+            Ticket.slack_channel,
             Ticket.derived_priority,
         )
         .where(
@@ -68,6 +75,9 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
     issues = []
     by_reporter: dict[str, dict] = {}
     priority_counts: dict[str, int] = {}
+    channel_counts: dict[str, int] = {}
+    priority_by_team: dict[str, dict[str, int]] = {}
+    priority_by_channel: dict[str, dict[str, int]] = {}
     issues_by_category: dict[str, list[dict]] = {"content": [], "engg_oncall": [], "uncategorized": []}
     for (
         ticket_id,
@@ -78,9 +88,12 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         canonical_status,
         created_at,
         slack_workflow,
+        slack_channel,
         derived_priority,
     ) in rows.all():
         reporter_name = reporter_contact_name or owner_name or "Unassigned"
+        team = _classify_workflow(slack_workflow) or "uncategorized"
+        channel = slack_channel or "Unknown"
         issue = {
             "ticket_id": ticket_id,
             "subject": subject,
@@ -90,18 +103,26 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             "stage_label": stage_label,
             "created_at": created_at.isoformat() if created_at else None,
             "priority": derived_priority,
+            "team": team,
+            "channel": channel,
         }
         issues.append(issue)
-        issues_by_category[_classify_workflow(slack_workflow) or "uncategorized"].append(issue)
+        issues_by_category[team].append(issue)
 
         # Aggregated across every matching ticket, not just the truncated
         # page below -- a chart summarizing "who reports issues" shouldn't
-        # undercount past the drilldown cap.
+        # undercount past the drilldown cap. Same goes for the per-team/
+        # per-channel priority counts feeding the priority chart's filters.
         bucket = by_reporter.setdefault(reporter_name, {"reported_count": 0, "solved_count": 0})
         bucket["reported_count"] += 1
         if canonical_status == "Resolved":
             bucket["solved_count"] += 1
         priority_counts[derived_priority] = priority_counts.get(derived_priority, 0) + 1
+        channel_counts[channel] = channel_counts.get(channel, 0) + 1
+        team_counts = priority_by_team.setdefault(team, {})
+        team_counts[derived_priority] = team_counts.get(derived_priority, 0) + 1
+        chan_counts = priority_by_channel.setdefault(channel, {})
+        chan_counts[derived_priority] = chan_counts.get(derived_priority, 0) + 1
 
     def _category_group(category: str) -> dict:
         category_issues = issues_by_category[category]
@@ -117,6 +138,9 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         "issues": issues[:_DRILLDOWN_LIMIT],
         "truncated": truncated,
         "issue_count_by_priority": priority_counts,
+        "issue_count_by_channel": channel_counts,
+        "priority_by_team": priority_by_team,
+        "priority_by_channel": priority_by_channel,
         "by_reporter": sorted(
             (
                 {"reporter_name": name, **counts}

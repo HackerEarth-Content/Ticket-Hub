@@ -7,6 +7,15 @@ interface Props {
   loading: boolean;
 }
 
+// Priority → existing chip severity classes (App.css) -- unknown values fall
+// back to neutral, same defensive stance as SlackPriorityCard's "Other".
+const PRIORITY_CHIP: Record<string, string> = {
+  LOW: "good",
+  MEDIUM: "warning",
+  HIGH: "serious",
+  URGENT: "critical",
+};
+
 export function IssueTable({ rows }: { rows: SlackIssue[] }) {
   return (
     <div className="tbl-wrap">
@@ -36,7 +45,11 @@ export function IssueTable({ rows }: { rows: SlackIssue[] }) {
                 )}
               </td>
               <td>{issue.owner_name ?? "—"}</td>
-              <td>{issue.priority}</td>
+              <td>
+                <span className={`chip ${PRIORITY_CHIP[issue.priority] ?? "neutral"}`}>
+                  {issue.priority}
+                </span>
+              </td>
               <td>{issue.stage_label}</td>
             </tr>
           ))}
@@ -90,7 +103,14 @@ export function ContentOnCallTable({ data, loading }: Props) {
       ) : rows.length === 0 ? (
         <div className="card-sub">No {CATEGORY_LABELS[category].toLowerCase()} in this period.</div>
       ) : (
-        <IssueTable rows={rows} />
+        <details>
+          <summary className="card-sub" style={{ cursor: "pointer" }}>
+            Show {rows.length} ticket{rows.length === 1 ? "" : "s"}
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <IssueTable rows={rows} />
+          </div>
+        </details>
       )}
 
       {!loading && uncategorized && uncategorized.count > 0 && (

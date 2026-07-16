@@ -551,6 +551,23 @@ h1 {
   height: 1px;
   background: var(--line);
 }
+.section-action {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.section-action:hover {
+  color: var(--ink);
+}
+.section-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
 /* ---- radial stat (ring progress for ratio-style KPIs) ---- */
 .radial-strip {

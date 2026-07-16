@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from hubspot_pipeline.category_map import resolve_module, split_categories
 from hubspot_pipeline.customer_map import resolve_customer_name
-from hubspot_pipeline.models import _ms_to_hours, _sla_met, _to_bool
+from hubspot_pipeline.models import _extract_channel, _ms_to_hours, _sla_met, _to_bool
 from hubspot_pipeline.pipeline import _match_ticket
 from hubspot_pipeline.priority import derive_priority
 from hubspot_pipeline.resolution_map import is_actionable, resolve_resolution_bucket
@@ -123,8 +123,17 @@ def test_match_ticket():
     assert _match_ticket(submitted_at, ["t3"], ticket_info) == (None, None, None)
 
 
+def test_extract_channel():
+    assert _extract_channel("Workflow: engg oncall\nChannel: #engg-assessment\nReported By: A") == "engg-assessment"
+    assert _extract_channel("channel: Content-Programs ") == "content-programs"
+    assert _extract_channel("Reported By: A") is None  # no Channel line
+    assert _extract_channel("Channel:") is None  # empty value
+    assert _extract_channel(None) is None
+
+
 if __name__ == "__main__":
     test_split_categories()
+    test_extract_channel()
     test_resolve_module()
     test_resolve_status()
     test_derive_priority()

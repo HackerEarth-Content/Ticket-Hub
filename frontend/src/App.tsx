@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./theme.css";
 import "./App.css";
 import { Header } from "./components/Header";
@@ -28,6 +28,8 @@ import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
+import { BarListCard } from "./components/BarListCard";
+import { SlackOverviewCard } from "./components/SlackOverviewCard";
 import { SlackPriorityCard } from "./components/SlackPriorityCard";
 import { SlackReporterPieChart } from "./components/SlackReporterPieChart";
 import { SectionHeading } from "./components/SectionHeading";
@@ -44,14 +46,26 @@ export default function App() {
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [refreshTick, setRefreshTick] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [exportingCustomers, setExportingCustomers] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const { user, logout } = useAuth();
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
   const { live, sync, loading: liveLoading, syncing, syncError, syncNow } = useLiveStatus();
 
+  // The status poll (60s) notices when the backend's 5-min scheduled sync
+  // lands; refetch the dashboard data then, instead of on a blind timer.
+  // The ref skips the first non-null value so mount doesn't double-fetch.
+  const lastSyncedAt = sync?.last_synced_at ?? null;
+  const prevSyncedAt = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastSyncedAt && prevSyncedAt.current) setRefreshTick((t) => t + 1);
+    prevSyncedAt.current = lastSyncedAt;
+  }, [lastSyncedAt]);
+
   async function handleSyncNow() {
+    // No manual refresh bump -- syncNow updates last_synced_at, which the
+    // effect above turns into a data refetch.
     await syncNow();
-    setRefreshTick((t) => t + 1);
   }
 
   async function handleExport() {
@@ -66,6 +80,21 @@ export default function App() {
       URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleExportCustomers() {
+    setExportingCustomers(true);
+    try {
+      const blob = await api.exportCustomerCounts(period);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `customer-issues-${period.replace(/:/g, "_")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingCustomers(false);
     }
   }
 
@@ -204,7 +233,19 @@ export default function App() {
 
       {tab === "customers" && (
         <>
-          <SectionHeading title="Customers" color="var(--accent-indigo)" />
+          <SectionHeading
+            title="Customers"
+            color="var(--accent-indigo)"
+            action={
+              <button
+                className="section-action"
+                onClick={handleExportCustomers}
+                disabled={exportingCustomers}
+              >
+                {exportingCustomers ? "⏳ Exporting…" : "⬇️ Download Excel"}
+              </button>
+            }
+          />
           <CustomerOverviewCard data={data?.customerVolume ?? null} loading={loading} />
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
             <CustomerVolumeCard data={data?.customerVolume ?? null} loading={loading} />
@@ -220,6 +261,32 @@ export default function App() {
       {tab === "content_oncall" && (
         <>
           <SectionHeading title="Content/engg On-call" color="var(--accent-magenta)" />
+          <SlackOverviewCard data={data?.slackIssues ?? null} loading={loading} />
+          <div style={{ marginBottom: 14 }}>
+            <BarListCard
+              title="Issues by team"
+              sub="Slack-reported issues split by workflow team"
+              loading={loading}
+              emptyLabel="No Slack-reported issues in this period."
+              items={[
+                {
+                  label: "Content",
+                  value: data?.slackIssues?.tickets_by_workflow_category.content.count ?? 0,
+                  color: "var(--accent-magenta)",
+                },
+                {
+                  label: "Engg Oncall",
+                  value: data?.slackIssues?.tickets_by_workflow_category.engg_oncall.count ?? 0,
+                  color: "var(--accent-blue)",
+                },
+                {
+                  label: "Uncategorized",
+                  value: data?.slackIssues?.tickets_by_workflow_category.uncategorized.count ?? 0,
+                  color: "var(--ink-3)",
+                },
+              ].filter((i) => i.value > 0)}
+            />
+          </div>
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
             <SlackReporterPieChart
               data={data?.slackWorkflowIssues?.content.by_reporter ?? []}

@@ -83,6 +83,25 @@ def _extract_workflow(content: str | None) -> str | None:
     return match.group(1).strip() or None
 
 
+_CHANNEL_RE = re.compile(r"^Channel:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+
+def _extract_channel(content: str | None) -> str | None:
+    """Slack-sourced tickets may embed a "Channel: <name>" line alongside
+    "Workflow:"/"Reported By:" (e.g. "engg-assessment", "#content-programs").
+    Normalized to a bare lowercase name. None means "not tagged".
+    ponytail: unverified against live content (DB down 2026-07-16) -- if live
+    tickets carry no Channel line, everything lands in the Unknown bucket and
+    this regex needs adjusting to whatever the real line looks like."""
+    if not content:
+        return None
+    match = _CHANNEL_RE.search(content)
+    if not match:
+        return None
+    value = match.group(1).strip().lstrip("#").lower()
+    return value or None
+
+
 class DashboardTicket(BaseModel):
     """A HubSpot ticket normalized for dashboard KPIs/charts."""
 
@@ -111,6 +130,7 @@ class DashboardTicket(BaseModel):
     source_type: str | None
     reporter_contact_name: str | None  # parsed from ticket content, see _extract_reported_by
     slack_workflow: str | None  # parsed from ticket content, see _extract_workflow
+    slack_channel: str | None  # parsed from ticket content, see _extract_channel
 
     created_at: str | None        # createdate, ISO string
     closed_at: str | None         # closed_date, ISO string
@@ -199,6 +219,9 @@ class DashboardTicket(BaseModel):
             ),
             slack_workflow=(
                 _extract_workflow(props.get("content")) if source_type == "Slack" else None
+            ),
+            slack_channel=(
+                _extract_channel(props.get("content")) if source_type == "Slack" else None
             ),
             created_at=props.get("createdate"),
             closed_at=props.get("closed_date"),

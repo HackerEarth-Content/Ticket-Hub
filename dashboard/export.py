@@ -11,7 +11,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import NpsResponse, Ticket
@@ -159,6 +159,39 @@ async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
     _write_table(wb.create_sheet("Tickets"), tickets)
     _write_table(wb.create_sheet("NPS Responses"), nps_responses)
     _write_table(wb.create_sheet("Agents"), agents)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+async def build_customer_counts_workbook(session: AsyncSession, period: str) -> bytes:
+    """Single-sheet workbook: issues reported per customer for the period --
+    the same aggregate /customers/volume shows, but the full list instead of
+    top-N, plus the no-account bucket and a total."""
+    period_start, period_end = utils.resolve_period(period)
+    in_period = Ticket.created_at.between(period_start, period_end)
+
+    rows = await session.execute(
+        select(Ticket.customer_name, func.count())
+        .where(in_period, Ticket.customer_name.isnot(None))
+        .group_by(Ticket.customer_name)
+        .order_by(func.count().desc())
+    )
+    identified = rows.all()
+    no_account_count = await session.scalar(
+        select(func.count()).where(in_period, Ticket.customer_name.is_(None))
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Customer Issues"
+    ws.append(["Customer", "Issues reported"])
+    for name, count in identified:
+        ws.append([name, count])
+    ws.append(["(No account)", no_account_count or 0])
+    ws.append(["Total", sum(count for _, count in identified) + (no_account_count or 0)])
+    _autosize(ws)
 
     buffer = io.BytesIO()
     wb.save(buffer)

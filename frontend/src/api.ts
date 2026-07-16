@@ -110,6 +110,16 @@ export const api = {
   syncStatus: () => get<SyncStatus>("/meta/sync-status"),
   syncNow: () => post<SyncNowResult>("/meta/sync-now"),
   pipelines: () => get<Pipelines>("/meta/pipelines"),
+  exportCustomerCounts: async (period: Period): Promise<Blob> => {
+    const res = await fetch(`${BASE}/customers/export?period=${encodeURIComponent(period)}`);
+    if (!res.ok) {
+      throw new ApiError(
+        `GET /customers/export failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
+    }
+    return res.blob();
+  },
   exportWorkbook: async (period: Period): Promise<Blob> => {
     const res = await fetch(`${BASE}/export?period=${encodeURIComponent(period)}`);
     if (!res.ok) {

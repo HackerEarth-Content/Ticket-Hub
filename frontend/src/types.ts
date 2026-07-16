@@ -188,6 +188,8 @@ export interface SlackIssue {
   stage_label: string;
   created_at: string | null;
   priority: string;
+  team: string;
+  channel: string;
 }
 
 export interface SlackReporterCounts {
@@ -207,6 +209,9 @@ export interface SlackIssues {
   issues: SlackIssue[];
   truncated: boolean;
   issue_count_by_priority: Record<string, number>;
+  issue_count_by_channel: Record<string, number>;
+  priority_by_team: Record<string, Record<string, number>>;
+  priority_by_channel: Record<string, Record<string, number>>;
   by_reporter: SlackReporterCounts[];
   tickets_by_workflow_category: {
     content: SlackWorkflowTicketGroup;
