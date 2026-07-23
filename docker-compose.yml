@@ -1,0 +1,18 @@
+services:
+  backend:
+    build: .
+    env_file: .env  # compose parses quotes correctly, unlike `docker run --env-file`
+    environment:
+      # inside the container "localhost" is the container; point at the host's postgres
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/tickets-db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend

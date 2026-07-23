@@ -1,0 +1,26 @@
+# Secrets -- injected at runtime by compose (env_file), never baked in
+.env
+
+# Frontend has its own container (frontend/Dockerfile)
+frontend/
+
+# Local environments / caches
+.git
+.venv
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.claude/
+.impeccable
+.vscode/
+.idea/
+
+# Runtime artifacts
+logs/
+*.db*
+
+# Docker itself
+Dockerfile
+.dockerignore

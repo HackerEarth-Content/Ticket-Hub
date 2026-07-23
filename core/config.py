@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     USER_SECRET: str
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
-    FRONTEND_URL: str = "http://localhost:5173"
-    API_BASE_URL: str = "http://localhost:8000"
+    FRONTEND_URL: str
+    API_BASE_URL: str
     ENVIRONMENT: str = "development"
 
     # Comma-separated Google account emails allowed to sign in. Empty means

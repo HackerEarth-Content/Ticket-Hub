@@ -17,7 +17,9 @@ from sqlalchemy.orm import DeclarativeBase
 config = context.config
 config.set_main_option(
     "sqlalchemy.url",
-    os.getenv("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg://"),
+    os.getenv("DATABASE_URL", "")
+        .replace("postgresql://", "postgresql+psycopg://")
+        .replace("%", "%%"),
 )
 
 # Interpret the config file for Python logging.

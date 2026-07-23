@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from core.database import db_manager
 from core.users import fastapi_users
@@ -38,3 +40,11 @@ app.include_router(
 )
 
 app.include_router(dashboard_router)
+
+# Serve the built frontend (frontend/dist) when it exists -- in the Docker
+# image the SPA and the API share one origin, so api.ts's relative /dashboard
+# and /api URLs just work. Mounted last so the API routes above win; absent
+# in dev, where Vite serves the frontend and proxies to us instead.
+_frontend_dist = Path(__file__).parent / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
