@@ -6,7 +6,7 @@ managed via Alembic migrations, this module never creates or alters tables.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -14,6 +14,14 @@ from sqlalchemy.dialects.postgresql import insert
 from core.database import db_manager
 from core.orm import CsatResponse, Ticket
 from hubspot_pipeline.models import CsatSubmission, DashboardTicket
+
+# Tickets created before this date were intentionally purged from the DB
+# (2026-07-07). HubSpot's ticket search only filters by hs_lastmodifieddate,
+# so an old ticket touched again after the purge (reopened, commented,
+# closed) comes back through every sync -- with its true, older createdate --
+# and undoes the purge one ticket at a time. Drop those here, the one place
+# every sync path (--full/--days/--incremental) upserts through.
+_CREATED_FLOOR = datetime(2026, 2, 2, tzinfo=timezone.utc)
 
 
 def parse_iso(value: str | None) -> datetime | None:
@@ -35,13 +43,20 @@ def _to_row(t: DashboardTicket) -> dict:
 _BATCH_SIZE = 1000
 
 
+def _drop_pre_floor(rows: list[dict]) -> list[dict]:
+    """Rows with no created_at pass through untouched (rare/unexpected, not our call to drop)."""
+    return [r for r in rows if r["created_at"] is None or r["created_at"] >= _CREATED_FLOOR]
+
+
 async def upsert_tickets(tickets: list[DashboardTicket]) -> None:
     """Insert-or-update tickets by ticket_id, batched to stay under Postgres's
     parameter-count limit on large historical/incremental pulls."""
     if not tickets:
         return
 
-    rows = [_to_row(t) for t in tickets]
+    rows = _drop_pre_floor([_to_row(t) for t in tickets])
+    if not rows:
+        return
     update_cols = {c: c for c in rows[0] if c != "ticket_id"}
 
     session_factory = db_manager.session_factory()
