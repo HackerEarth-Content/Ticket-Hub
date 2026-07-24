@@ -144,6 +144,7 @@ export interface NumericStats {
 export interface AePerformance {
   backline_engineer: string;
   tickets_handled_count: number;
+  tickets_resolved_count: number;
   all_resolved: boolean;
   path_breakdown: Record<string, number>;
   ae_stage_time_hours: NumericStats;

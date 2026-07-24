@@ -58,7 +58,16 @@ async def get_backline_ae_performance(session: AsyncSession, period: str) -> dic
     """Per-backline-AE workload and speed, split by which door the ticket
     came through (Bug Bounty vs Frontline Escalation) -- mirrors the
     reference report's AE Performance sheet, but AEs come from live
-    `backline_engineer` data instead of a hardcoded name list."""
+    `backline_engineer` data instead of a hardcoded name list.
+
+    Workload stats (tickets_handled_count, stage/TTR breakdowns, escalation
+    and priority counts) are scoped by created_at -- "what landed in this
+    AE's queue this period". tickets_resolved_count is scoped separately by
+    closed_at, so a backlog ticket an AE actually closes this period counts
+    there even though it entered their queue earlier and never appears in
+    the created-scoped workload numbers -- conflating the two undercounts
+    real throughput (verified live 2026-07-24: an AE who closed 12 tickets
+    in a week, 8 of them backlog, showed only 4 "handled" that week)."""
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
         select(
@@ -81,8 +90,24 @@ async def get_backline_ae_performance(session: AsyncSession, period: str) -> dic
     for row in rows.all():
         by_ae.setdefault(row.backline_engineer, []).append(row)
 
+    resolved_rows = await session.execute(
+        select(Ticket.backline_engineer, func.count())
+        .where(
+            Ticket.closed_at.between(period_start, period_end),
+            Ticket.backline_engineer.isnot(None),
+        )
+        .group_by(Ticket.backline_engineer)
+    )
+    resolved_count_by_ae = dict(resolved_rows.all())
+
+    # Union, not just by_ae's keys -- an AE who only closed backlog this
+    # period (no new tickets created_at-in-period) would otherwise be
+    # missing from the table entirely despite having real throughput.
+    all_aes = sorted(set(by_ae) | set(resolved_count_by_ae))
+
     ae_performance = []
-    for ae, tickets in sorted(by_ae.items()):
+    for ae in all_aes:
+        tickets = by_ae.get(ae, [])
         path_counts: dict[str, int] = {}
         ae_stage_hours: list[float] = []
         ticket_ttr_hours: list[float] = []
@@ -125,7 +150,8 @@ async def get_backline_ae_performance(session: AsyncSession, period: str) -> dic
         ae_performance.append({
             "backline_engineer": ae,
             "tickets_handled_count": len(tickets),
-            "all_resolved": resolved_count == len(tickets),
+            "tickets_resolved_count": resolved_count_by_ae.get(ae, 0),
+            "all_resolved": bool(tickets) and resolved_count == len(tickets),
             "path_breakdown": path_counts,
             "ae_stage_time_hours": _numeric_stats(ae_stage_hours),
             "ae_stage_time_hours_by_path": {

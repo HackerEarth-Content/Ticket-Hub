@@ -31,7 +31,8 @@ export function BacklineAePerformanceCard({ data, loading }: Props) {
             <thead>
               <tr>
                 <th>AE</th>
-                <th className="num">Tickets</th>
+                <th className="num">Assigned this period</th>
+                <th className="num">Resolved this period</th>
                 <th className="num">Median AE time</th>
                 <th className="num">Median ticket TTR</th>
                 <th className="num">Bug Bounty avg</th>
@@ -46,6 +47,7 @@ export function BacklineAePerformanceCard({ data, loading }: Props) {
                 <tr key={ae.backline_engineer}>
                   <td className="name-cell">{ae.backline_engineer}</td>
                   <td className="num">{formatNumber(ae.tickets_handled_count)}</td>
+                  <td className="num">{formatNumber(ae.tickets_resolved_count)}</td>
                   <td className="num">{formatHours(ae.ae_stage_time_hours.median)}</td>
                   <td className="num">{formatHours(ae.ticket_resolution_time_hours.median)}</td>
                   <td className="num">
