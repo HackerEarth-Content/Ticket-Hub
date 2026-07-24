@@ -15,8 +15,19 @@ interface Props {
 const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const ORDINAL_RAMP = ["var(--ord-1)", "var(--ord-2)", "var(--ord-4)", "var(--ord-5)"];
 
+// Support's P-level equivalent for each derived priority -- same mapping as
+// SlackPriorityCard's BarList, kept in sync so the bar rows and pie slices
+// show the same label.
+const P_LABEL: Record<string, string> = {
+  LOW: "P3/P4",
+  MEDIUM: "P2",
+  HIGH: "P1",
+  URGENT: "P0",
+};
+
 interface Slice {
   name: string;
+  displayName: string;
   count: number;
   color: string;
 }
@@ -24,6 +35,7 @@ interface Slice {
 function buildSlices(data: Record<string, number>): Slice[] {
   const known = PRIORITY_ORDER.filter((p) => data[p]).map((p, i) => ({
     name: p,
+    displayName: P_LABEL[p] ? `${p} (${P_LABEL[p]})` : p,
     count: data[p],
     color: ORDINAL_RAMP[i],
   }));
@@ -31,7 +43,12 @@ function buildSlices(data: Record<string, number>): Slice[] {
   if (rest.length === 0) return known;
   return [
     ...known,
-    { name: "Other", count: rest.reduce((sum, p) => sum + data[p], 0), color: "var(--ink-3)" },
+    {
+      name: "Other",
+      displayName: "Other",
+      count: rest.reduce((sum, p) => sum + data[p], 0),
+      color: "var(--ink-3)",
+    },
   ];
 }
 
@@ -40,7 +57,7 @@ function SliceTooltip({ active, payload }: any) {
   const slice: Slice = payload[0].payload;
   return (
     <div className="chart-tooltip">
-      <div className="tt-title">{slice.name}</div>
+      <div className="tt-title">{slice.displayName}</div>
       <div className="tt-row">
         <span className="tt-sw" style={{ background: slice.color }} />
         <strong style={{ color: "var(--ink)" }}>{slice.count}</strong>&nbsp;issues
@@ -137,7 +154,7 @@ export function SlackPriorityPieChart({ data, activePriority, onSliceClick, load
             style={{ cursor: "pointer" }}
           >
             <span className="sw" style={{ background: s.color }} />
-            <span className="pie-legend-name">{s.name}</span>
+            <span className="pie-legend-name">{s.displayName}</span>
             <span className="pie-legend-count">{s.count}</span>
             <span className="pie-legend-pct">
               {total ? Math.round((s.count / total) * 100) : 0}%

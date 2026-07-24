@@ -21,14 +21,11 @@ header.top {
 .brand .mark {
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo));
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 15px;
   flex-shrink: 0;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  box-sizing: border-box;
 }
 .brand .eyebrow {
   font-size: 10.5px;

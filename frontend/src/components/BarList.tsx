@@ -3,6 +3,7 @@ export interface BarItem {
   value: number;
   color: string;
   displayValue?: string;
+  displayLabel?: string;
 }
 
 interface Props {
@@ -20,7 +21,7 @@ export function BarList({ items, maxValue, onItemClick, activeLabel }: Props) {
         const content = (
           <>
             <div className="name" title={item.label}>
-              {item.label}
+              {item.displayLabel ?? item.label}
             </div>
             <div className="bar-track">
               <div

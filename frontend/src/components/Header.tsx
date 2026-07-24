@@ -78,7 +78,11 @@ export function Header({
   return (
     <header className="top">
       <div className="brand">
-        <div className="mark">H</div>
+        <img
+          className="mark"
+          src={theme === "dark" ? "/hackerearth_logo_light.png" : "/hackerearth_logo.png"}
+          alt="HackerEarth"
+        />
         <div>
           <div className="eyebrow">HackerEarth &middot; Support</div>
           <h1>Ticket Hub</h1>

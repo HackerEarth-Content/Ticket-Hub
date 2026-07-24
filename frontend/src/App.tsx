@@ -291,7 +291,7 @@ export default function App() {
             <SlackReporterPieChart
               data={data?.slackWorkflowIssues?.content.by_reporter ?? []}
               loading={loading}
-              title="Content issues by reporter"
+              title="Content Requests by reporter"
               emptyLabel="No Content-workflow issues in this period."
             />
             <SlackReporterPieChart
