@@ -7,8 +7,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from core.config import settings
 from core.database import db_manager
 from core.users import fastapi_users
 from core.scheduler import start_scheduler
@@ -29,7 +31,23 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
     await db_manager.close()
 
-app = FastAPI(title="HE Helpdesk Dashboard API", lifespan=lifespan)
+app = FastAPI(
+    title="HE Helpdesk Dashboard API",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+# Cookie auth (core/users.py) needs credentialed CORS, which browsers only
+# allow with an explicit origin -- "*" is rejected once allow_credentials=True.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include API routers
 app.include_router(auth_router, prefix="/api")
