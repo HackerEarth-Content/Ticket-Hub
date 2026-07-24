@@ -27,6 +27,7 @@ import { CustomerVolumeCard } from "./components/CustomerVolumeCard";
 import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
+import { CustomerExportControl } from "./components/CustomerExportControl";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
 import { BarListCard } from "./components/BarListCard";
 import { SlackOverviewCard } from "./components/SlackOverviewCard";
@@ -46,7 +47,6 @@ export default function App() {
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [refreshTick, setRefreshTick] = useState(0);
   const [exporting, setExporting] = useState(false);
-  const [exportingCustomers, setExportingCustomers] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const { user, logout } = useAuth();
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
@@ -80,21 +80,6 @@ export default function App() {
       URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
-    }
-  }
-
-  async function handleExportCustomers() {
-    setExportingCustomers(true);
-    try {
-      const blob = await api.exportCustomerCounts(period);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `customer-issues-${period.replace(/:/g, "_")}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setExportingCustomers(false);
     }
   }
 
@@ -236,15 +221,7 @@ export default function App() {
           <SectionHeading
             title="Customers"
             color="var(--accent-indigo)"
-            action={
-              <button
-                className="section-action"
-                onClick={handleExportCustomers}
-                disabled={exportingCustomers}
-              >
-                {exportingCustomers ? "⏳ Exporting…" : "⬇️ Download Excel"}
-              </button>
-            }
+            action={<CustomerExportControl period={period} />}
           />
           <CustomerOverviewCard data={data?.customerVolume ?? null} loading={loading} />
           <div className="grid cols-2" style={{ marginBottom: 14 }}>

@@ -17,6 +17,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.orm import NpsResponse, Ticket
 from dashboard import backline, frontline, utils
 
+# Mirrors frontend/src/format.ts's hubspotTicketUrl -- same portal, same
+# ticket object type ID (0-5), verified against this portal's own API
+# response. Kept in sync manually; the two are far enough apart (Python
+# export vs. TS UI) that sharing a constant isn't worth the coupling.
+_HUBSPOT_PORTAL_ID = 2586902
+
+
+def _hubspot_ticket_url(ticket_id: str) -> str:
+    return f"https://app.hubspot.com/contacts/{_HUBSPOT_PORTAL_ID}/record/0-5/{ticket_id}"
+
 _TICKET_COLUMNS = [
     "ticket_id",
     "subject",
@@ -159,6 +169,75 @@ async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
     _write_table(wb.create_sheet("Tickets"), tickets)
     _write_table(wb.create_sheet("NPS Responses"), nps_responses)
     _write_table(wb.create_sheet("Agents"), agents)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+# (ORM attribute, column header) pairs, in the order the "tickets by
+# customer" export should show them -- ticket_id is handled separately since
+# it needs a hyperlink, not a plain value.
+_CUSTOMER_TICKET_DETAIL_COLUMNS = [
+    ("owner_name", "Ticket Owner"),
+    ("backline_engineer", "Backline Engineer"),
+    ("created_at", "Created At"),
+    ("closed_at", "Closed At"),
+    ("canonical_status", "Ticket Status"),
+    ("time_to_first_agent_reply_hours", "FRT (hrs)"),
+    ("fcr", "FCR"),
+    ("time_to_close_hours", "Resolution Time (hrs)"),
+    ("final_resolution", "Final Resolution"),
+    ("module", "Module"),
+    ("primary_category", "Category"),
+    ("sub_category", "Sub-Category"),
+]
+
+
+def _safe_sheet_title(name: str) -> str:
+    """Excel sheet titles: max 31 chars, no : \\ / ? * [ ]."""
+    for ch in ':\\/?*[]':
+        name = name.replace(ch, " ")
+    return name[:31]
+
+
+async def build_customer_ticket_detail_workbook(
+    session: AsyncSession, customer_name: str, period: str
+) -> bytes:
+    """One sheet: every ticket for a single identified customer/account in
+    the period, ticket-level (not aggregated) -- for support/account leads
+    who need the actual ticket list, not just the counts
+    build_customer_counts_workbook gives across all customers."""
+    period_start, period_end = utils.resolve_period(period)
+
+    columns = ["ticket_id"] + [attr for attr, _ in _CUSTOMER_TICKET_DETAIL_COLUMNS]
+    rows = await session.execute(
+        select(*[getattr(Ticket, c) for c in columns])
+        .where(Ticket.customer_name == customer_name, Ticket.created_at.between(period_start, period_end))
+        .order_by(Ticket.created_at.desc())
+    )
+    tickets = rows.all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = _safe_sheet_title(customer_name)
+
+    headers = ["HubSpot Ticket ID"] + [label for _, label in _CUSTOMER_TICKET_DETAIL_COLUMNS]
+    heading = f"{customer_name} tickets: {period_start.date().isoformat()} – {period_end.date().isoformat()}"
+    ws.append([heading])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws.append(headers)
+
+    if not tickets:
+        ws.append(["No tickets for this customer in this period"])
+    for row in tickets:
+        ticket_id = row[0]
+        ws.append([ticket_id] + [_cell_value(v) for v in row[1:]])
+        id_cell = ws.cell(row=ws.max_row, column=1)
+        id_cell.hyperlink = _hubspot_ticket_url(ticket_id)
+        id_cell.style = "Hyperlink"
+
+    _autosize(ws)
 
     buffer = io.BytesIO()
     wb.save(buffer)

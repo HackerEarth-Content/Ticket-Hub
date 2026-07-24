@@ -37,6 +37,20 @@ async def _top_customer_names(session: AsyncSession, in_period, limit: int) -> l
     return [name for name, _ in rows.all()]
 
 
+async def get_customer_names(session: AsyncSession) -> dict:
+    """Every distinct identified customer/account name in the DB, all-time --
+    not period- or top-N-scoped, unlike the KPIs below, since this feeds the
+    "tickets by customer" export's company picker and a customer with low
+    volume this period shouldn't disappear from that dropdown."""
+    rows = await session.execute(
+        select(Ticket.customer_name)
+        .where(Ticket.customer_name.isnot(None))
+        .distinct()
+        .order_by(Ticket.customer_name)
+    )
+    return {"customer_names": [name for (name,) in rows.all()]}
+
+
 async def get_customer_ticket_volume(session: AsyncSession, period: str) -> dict:
     """Ticket count per identified customer, plus how much volume has no
     identified customer at all -- that split is the headline here, not an

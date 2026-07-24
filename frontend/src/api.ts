@@ -107,6 +107,7 @@ export const api = {
   customerStatus: (period: Period) =>
     get<CustomerStatusBreakdown>("/customers/status", { period }),
   customerDetails: (period: Period) => get<CustomerDetails>("/customers/details", { period }),
+  customerNames: () => get<{ customer_names: string[] }>("/customers/names"),
   syncStatus: () => get<SyncStatus>("/meta/sync-status"),
   syncNow: () => post<SyncNowResult>("/meta/sync-now"),
   pipelines: () => get<Pipelines>("/meta/pipelines"),
@@ -115,6 +116,17 @@ export const api = {
     if (!res.ok) {
       throw new ApiError(
         `GET /customers/export failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
+    }
+    return res.blob();
+  },
+  exportCustomerTickets: async (period: Period, customerName: string): Promise<Blob> => {
+    const url = `${BASE}/customers/export/tickets?period=${encodeURIComponent(period)}&customer_name=${encodeURIComponent(customerName)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new ApiError(
+        `GET /customers/export/tickets failed: ${res.status} ${res.statusText}`,
         res.status,
       );
     }

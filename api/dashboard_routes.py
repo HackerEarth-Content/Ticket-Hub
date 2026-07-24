@@ -202,6 +202,31 @@ async def customers_volume(period: str = PeriodParam, session: AsyncSession = De
     return await customers.get_customer_ticket_volume(session, period)
 
 
+@router.get("/customers/names")
+async def customer_names(session: AsyncSession = Depends(get_session)):
+    """Full distinct customer/account name list -- feeds the "tickets by
+    customer" export's company picker, unlike /customers/volume's top-15."""
+    return await customers.get_customer_names(session)
+
+
+@router.get("/customers/export/tickets")
+async def customers_export_tickets(
+    customer_name: str,
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+):
+    """Ticket-level Excel for one customer -- shares /customers/export's
+    (open) gating, same tab."""
+    content = await export.build_customer_ticket_detail_workbook(session, customer_name, period)
+    safe_name = "".join(c if c.isalnum() else "_" for c in customer_name)
+    filename = f"customer-tickets-{safe_name}-{period.replace(':', '_')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/customers/export")
 async def customers_export(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     """Excel of per-customer issue counts -- same aggregate the Customers tab
