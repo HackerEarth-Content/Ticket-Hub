@@ -28,6 +28,11 @@ class DatabaseManager:
         """Initialize database connection"""
         self.engine = create_async_engine(
             self._database_url,
+            # ponytail: port 6543 is Supabase's transaction-mode pooler --
+            # the physical connection is shared across clients between
+            # statements, so psycopg's server-side prepared statements
+            # (named per-connection) collide across pooled sessions.
+            connect_args={"prepare_threshold": None},
         )
 
         logger.info("Database initialized")

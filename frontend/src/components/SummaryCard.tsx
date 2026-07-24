@@ -33,11 +33,19 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
             <StatTile
               label="Median resolution time"
               value={formatHours(summary.median_resolution_time_hours)}
+              foot="incl. backlog tickets closed this period"
             />
             <StatTile
               label="Mean resolution time"
               value={formatHours(summary.mean_resolution_time_hours)}
             />
+            {summary.period === "today" && (
+              <StatTile
+                label="Same-day resolution time"
+                value={formatHours(summary.same_day_median_resolution_time_hours)}
+                foot={`median · ${formatNumber(summary.same_day_resolved_count)} same-day tickets`}
+              />
+            )}
             <StatTile
               label="Resolved within 3 days"
               value={formatPercent(summary.resolution_within_72_hours_percentage)}

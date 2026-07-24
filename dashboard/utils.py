@@ -219,6 +219,19 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
         )
     )
 
+    # Same-day resolution speed: tickets both created and closed within the
+    # period, as opposed to median_resolution_time_hours above which also
+    # includes older backlog tickets that happen to close in this window --
+    # those can drag the all-up median to a number that doesn't reflect how
+    # fast the team handles the tickets it opens the same day.
+    same_day_resolved = Ticket.created_at.between(
+        period_start, period_end
+    ) & Ticket.closed_at.between(period_start, period_end)
+    same_day_resolved_count = await session.scalar(select(func.count()).where(same_day_resolved))
+    same_day_median_resolution_time_hours = await session.scalar(
+        select(_median_resolution_time_hours_expr()).where(same_day_resolved)
+    )
+
     # Resolution SLA Compliance per the reference frontline report's TTR
     # group: actionable tickets resolved within 3 days (72h), out of all
     # actionable tickets resolved in the period -- resolved-within-48h
@@ -249,6 +262,12 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
         "tickets_resolved_within_48_hours_count": resolved_within_48_hours_count or 0,
         "resolution_within_72_hours_percentage": _percentage(
             actionable_resolved_within_72_hours_count, actionable_resolved_count
+        ),
+        "same_day_resolved_count": same_day_resolved_count or 0,
+        "same_day_median_resolution_time_hours": (
+            round(same_day_median_resolution_time_hours, 1)
+            if same_day_median_resolution_time_hours is not None
+            else None
         ),
     }
 

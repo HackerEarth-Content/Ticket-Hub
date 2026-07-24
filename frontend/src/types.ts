@@ -26,6 +26,8 @@ export interface Summary {
   mean_resolution_time_hours: number | null;
   tickets_resolved_within_48_hours_count: number;
   resolution_within_72_hours_percentage: number | null;
+  same_day_resolved_count: number;
+  same_day_median_resolution_time_hours: number | null;
 }
 
 export interface VolumeTrendPoint {
