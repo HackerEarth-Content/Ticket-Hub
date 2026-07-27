@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from typing import Any
 
@@ -49,6 +50,15 @@ def _sla_met(raw: str | None) -> bool | None:
     if raw is None or raw == "":
         return None
     return raw == "1"
+
+
+def _unescape(value: str | None) -> str | None:
+    """HubSpot ticket properties sometimes arrive already HTML-entity-encoded
+    (e.g. "Tom &amp; Jerry&#39;s") from whatever created the ticket -- HubSpot
+    stores and returns the string as-is, it doesn't decode on read. Undo that
+    once here, at ingestion, so every downstream reader (export, dashboard,
+    frontend) sees the real character."""
+    return html.unescape(value) if value else value
 
 
 _REPORTED_BY_RE = re.compile(r"^Reported By:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
@@ -171,7 +181,7 @@ class DashboardTicket(BaseModel):
         owner_id = props.get("hubspot_owner_id") or None
 
         categories = split_categories(props.get("hs_ticket_category"))
-        subject = props.get("subject") or ""
+        subject = _unescape(props.get("subject")) or ""
         raw_priority = props.get("hs_ticket_priority") or None
         derived, inferred = derive_priority(raw_priority, subject, categories, stage_label)
 
@@ -202,7 +212,7 @@ class DashboardTicket(BaseModel):
             module=resolve_module(categories),
             hubspot_module=props.get("module") or None,
             sub_category=props.get("sub_category") or None,
-            customer_name=resolve_customer_name(props),
+            customer_name=_unescape(resolve_customer_name(props)),
             priority=raw_priority,
             derived_priority=derived,
             priority_inferred=inferred,
@@ -215,7 +225,9 @@ class DashboardTicket(BaseModel):
             # extracting it from other sources' descriptions would be noise,
             # not signal.
             reporter_contact_name=(
-                _extract_reported_by(props.get("content")) if source_type == "Slack" else None
+                _unescape(_extract_reported_by(props.get("content")))
+                if source_type == "Slack"
+                else None
             ),
             slack_workflow=(
                 _extract_workflow(props.get("content")) if source_type == "Slack" else None

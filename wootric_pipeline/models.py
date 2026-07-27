@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from datetime import datetime, timezone
 from typing import Any
 
@@ -40,15 +41,18 @@ class NpsSubmission(BaseModel):
     def from_raw(cls, raw: dict[str, Any], end_user: dict[str, Any] | None) -> "NpsSubmission":
         end_user = end_user or {}
         end_user_id = raw.get("end_user_id")
+        properties = dict(end_user.get("properties") or {})
+        if properties.get("company"):
+            properties["company"] = html.unescape(properties["company"])
         return cls(
             response_id=str(raw["id"]),
             end_user_id=str(end_user_id) if end_user_id else None,
             email=end_user.get("email"),
             score=raw["score"],
-            text=raw.get("text"),
+            text=html.unescape(raw["text"]) if raw.get("text") else raw.get("text"),
             completed=raw.get("completed"),
             excluded_from_calculations=bool(raw.get("excluded_from_calculations")),
             created_at=_to_iso(raw["created_at"]),
             tags=[_tag_name(t) for t in (raw.get("tags") or [])],
-            properties=end_user.get("properties") or {},
+            properties=properties,
         )

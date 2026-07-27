@@ -127,14 +127,26 @@ _NPS_COLUMNS = [
 ]
 
 
+def _nps_company(properties: dict | None) -> str:
+    """Wootric's "company" end-user property -- same field
+    dashboard.utils.get_nps uses for account_name (verified live
+    2026-07-13, populated on 76/77 responses)."""
+    return (properties or {}).get("company") or "Unknown"
+
+
 async def _fetch_nps_responses(session: AsyncSession, period: str) -> list[dict]:
     period_start, period_end = utils.resolve_period(period)
     rows = await session.execute(
-        select(*[getattr(NpsResponse, c) for c in _NPS_COLUMNS])
+        select(*[getattr(NpsResponse, c) for c in _NPS_COLUMNS], NpsResponse.properties)
         .where(NpsResponse.created_at.between(period_start, period_end))
         .order_by(NpsResponse.created_at.desc())
     )
-    return [dict(zip(_NPS_COLUMNS, row)) for row in rows.all()]
+    results = []
+    for *values, properties in rows.all():
+        row = dict(zip(_NPS_COLUMNS, values))
+        row["company"] = _nps_company(properties)
+        results.append(row)
+    return results
 
 
 async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
