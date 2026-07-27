@@ -9,13 +9,15 @@ from __future__ import annotations
 import io
 
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import NpsResponse, Ticket
-from dashboard import backline, frontline, utils
+from dashboard import backline, customers, frontline, utils
+from dashboard.customer_matching import match_names
 
 # Mirrors frontend/src/format.ts's hubspotTicketUrl -- same portal, same
 # ticket object type ID (0-5), verified against this portal's own API
@@ -169,6 +171,119 @@ async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
     _write_table(wb.create_sheet("Tickets"), tickets)
     _write_table(wb.create_sheet("NPS Responses"), nps_responses)
     _write_table(wb.create_sheet("Agents"), agents)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+# Styling for the "customer name list" report below -- matches the
+# reference "Customer tickets raised.xlsx" workbook this feature replicates
+# (title row, blank row, blue header row, frozen at row 4).
+_REPORT_HEADER_FILL = PatternFill("solid", fgColor="305496")
+_REPORT_HEADER_FONT = Font(bold=True, color="FFFFFF")
+
+
+def _write_report_sheet(
+    ws: Worksheet,
+    title: str,
+    headers: list[str],
+    rows: list[list],
+    decimal_columns: frozenset[int] = frozenset(),
+) -> None:
+    ws.append([title])
+    ws.cell(row=1, column=1).font = Font(bold=True, size=14)
+    ws.append([])
+    ws.append(headers)
+    for cell in ws[3]:
+        cell.font = _REPORT_HEADER_FONT
+        cell.fill = _REPORT_HEADER_FILL
+    if not rows:
+        ws.append(["No matches"])
+    for row in rows:
+        ws.append(row)
+        for col in decimal_columns:
+            ws.cell(row=ws.max_row, column=col).number_format = "0.0"
+    ws.freeze_panes = "A4"
+    _autosize(ws)
+
+
+def _format_hms(hours: float) -> str:
+    total_seconds = round(hours * 3600)
+    h, rem = divmod(total_seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+async def build_customer_list_workbook(session: AsyncSession, input_names: list[str]) -> bytes:
+    """Given a free-text list of company names, matches them (best-effort,
+    see dashboard/customer_matching.py) against ticket customer_name values
+    and builds the same 3-sheet report as the reference "Customer tickets
+    raised.xlsx": per-company ticket-count/resolution summary, raw matched
+    tickets, and companies with no match. Not period-scoped -- this is an
+    ad-hoc "how does this account list look across all tickets" pull, not
+    one of the dashboard's period-based KPIs."""
+    ticket_names = (await customers.get_customer_names(session))["customer_names"]
+    matched, unmatched = match_names(input_names, ticket_names)
+
+    by_blackops: dict[str, list[tuple[str, float | None]]] = {}
+    if matched:
+        result = await session.execute(
+            select(Ticket.customer_name, Ticket.ticket_id, Ticket.time_to_close_hours).where(
+                Ticket.customer_name.in_(matched.keys())
+            )
+        )
+        for blackops_name, ticket_id, hours in result.all():
+            by_blackops.setdefault(blackops_name, []).append((ticket_id, hours))
+
+    summary_rows = []
+    for blackops_name, aliases in matched.items():
+        tickets = by_blackops.get(blackops_name, [])
+        hours_list = [h for _, h in tickets if h is not None]
+        summary_rows.append(
+            [
+                ", ".join(aliases),
+                blackops_name,
+                len(tickets),
+                round(sum(hours_list) / len(hours_list), 1) if hours_list else None,
+                round(min(hours_list), 1) if hours_list else None,
+                round(max(hours_list), 1) if hours_list else None,
+            ]
+        )
+    summary_rows.sort(key=lambda r: r[2], reverse=True)
+
+    detail_rows = [
+        [blackops_name, ticket_id, _format_hms(hours), round(hours, 1)]
+        for blackops_name, tickets in sorted(by_blackops.items())
+        for ticket_id, hours in tickets
+        if hours is not None
+    ]
+
+    no_ticket_rows = [[name, ""] for name in unmatched]
+
+    wb = Workbook()
+    ws_summary = wb.active
+    ws_summary.title = _safe_sheet_title("Company Summary")
+    _write_report_sheet(
+        ws_summary,
+        "Companies With Tickets — sorted by ticket count",
+        ["Company Name(s)", "Blackops Name", "Ticket Count", "Avg Resolution (hrs)", "Min Resolution (hrs)", "Max Resolution (hrs)"],
+        summary_rows,
+        decimal_columns=frozenset({4, 5, 6}),
+    )
+    _write_report_sheet(
+        wb.create_sheet(_safe_sheet_title("Copy of Matched Tickets (Raw)")),
+        "All Matched Tickets — Detail",
+        ["Blackops Name", "Ticket ID", "Resolution time in Hours", "Resolution Hours (decimal)"],
+        detail_rows,
+        decimal_columns=frozenset({4}),
+    )
+    _write_report_sheet(
+        wb.create_sheet(_safe_sheet_title("Copy of No Tickets Found")),
+        "Target-List Companies With No Matching Tickets",
+        ["Company Name(s)", "Blackops Name"],
+        no_ticket_rows,
+    )
 
     buffer = io.BytesIO()
     wb.save(buffer)

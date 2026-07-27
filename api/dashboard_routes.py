@@ -3,7 +3,7 @@ backline.py, and frontline.py."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Body, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
@@ -224,6 +224,22 @@ async def customers_export_tickets(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/customers/export/by-list")
+async def customers_export_by_list(
+    names: list[str] = Body(..., embed=True),
+    session: AsyncSession = Depends(get_session),
+):
+    """Excel report for a free-text list of company names, matched
+    best-effort against ticket customer_name values -- shares the tab's
+    (open) gating, same as the other two customer export routes."""
+    content = await export.build_customer_list_workbook(session, names)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="customer-list-report.xlsx"'},
     )
 
 

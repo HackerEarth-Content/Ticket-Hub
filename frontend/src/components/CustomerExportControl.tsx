@@ -16,18 +16,24 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 /** Customers tab's download control -- a single button revealing a dropdown
- * with two options, same trigger/menu pattern as Header's account menu, so
- * the two-way choice doesn't cost permanent toolbar width (an always-visible
+ * with three options, same trigger/menu pattern as Header's account menu, so
+ * the choice doesn't cost permanent toolbar width (an always-visible
  * mode select + company select broke the section header's layout).
  * "Tickets per customer" is the existing all-customer counts export;
- * "Tickets by customer" drills into a company picker before downloading.
- * Both share the tab's (open, no-login) gating -- see api/dashboard_routes.py. */
+ * "Tickets by customer" drills into a company picker before downloading;
+ * "Tickets for company list" matches a pasted list of names against ticket
+ * data (best-effort, see dashboard/customer_matching.py) and downloads the
+ * same 3-sheet report format as the reference "Customer tickets raised"
+ * workbook. All three share the tab's (open, no-login) gating -- see
+ * api/dashboard_routes.py. */
 export function CustomerExportControl({ period }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [byCustomer, setByCustomer] = useState(false);
+  const [byList, setByList] = useState(false);
   const [customerNames, setCustomerNames] = useState<string[]>([]);
   const [loadingNames, setLoadingNames] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState("");
+  const [nameListText, setNameListText] = useState("");
   const [exporting, setExporting] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -37,6 +43,7 @@ export function CustomerExportControl({ period }: Props) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
         setByCustomer(false);
+        setByList(false);
       }
     }
     document.addEventListener("mousedown", onClickOutside);
@@ -78,6 +85,23 @@ export function CustomerExportControl({ period }: Props) {
     }
   }
 
+  async function downloadByList() {
+    const names = nameListText
+      .split(/[,\n]/)
+      .map((n) => n.trim())
+      .filter(Boolean);
+    if (names.length === 0) return;
+    setExporting(true);
+    try {
+      const blob = await api.exportCustomerList(names);
+      downloadBlob(blob, "customer-list-report.xlsx");
+      setMenuOpen(false);
+      setByList(false);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="auth-menu-wrap" ref={menuRef}>
       <button
@@ -89,7 +113,7 @@ export function CustomerExportControl({ period }: Props) {
       </button>
       {menuOpen && (
         <div className="auth-menu">
-          {!byCustomer ? (
+          {!byCustomer && !byList ? (
             <>
               <button className="auth-menu-item" disabled={exporting} onClick={downloadCounts}>
                 Ticket count per customer
@@ -97,8 +121,11 @@ export function CustomerExportControl({ period }: Props) {
               <button className="auth-menu-item" disabled={exporting} onClick={openByCustomer}>
                 Tickets by customer
               </button>
+              <button className="auth-menu-item" disabled={exporting} onClick={() => setByList(true)}>
+                Tickets for company list
+              </button>
             </>
-          ) : (
+          ) : byCustomer ? (
             <>
               <div className="auth-menu-name">Tickets by customer</div>
               <select
@@ -123,6 +150,29 @@ export function CustomerExportControl({ period }: Props) {
                 {exporting ? "⏳ Exporting…" : "⬇️ Download"}
               </button>
               <button className="auth-menu-item" disabled={exporting} onClick={() => setByCustomer(false)}>
+                ← Back
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="auth-menu-name">Tickets for company list</div>
+              <textarea
+                className="select"
+                value={nameListText}
+                onChange={(e) => setNameListText(e.target.value)}
+                disabled={exporting}
+                placeholder="Company names, comma or newline separated (e.g. Sprinklr, Fractal.ai)"
+                rows={4}
+                style={{ margin: "0 8px 6px", width: "calc(100% - 16px)", resize: "vertical" }}
+              />
+              <button
+                className="auth-menu-item"
+                disabled={exporting || !nameListText.trim()}  
+                onClick={downloadByList}
+              >
+                {exporting ? "⏳ Exporting…" : "⬇️ Download"}
+              </button>
+              <button className="auth-menu-item" disabled={exporting} onClick={() => setByList(false)}>
                 ← Back
               </button>
             </>

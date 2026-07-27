@@ -132,6 +132,20 @@ export const api = {
     }
     return res.blob();
   },
+  exportCustomerList: async (names: string[]): Promise<Blob> => {
+    const res = await fetch(`${BASE}/customers/export/by-list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    if (!res.ok) {
+      throw new ApiError(
+        `POST /customers/export/by-list failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
+    }
+    return res.blob();
+  },
   exportWorkbook: async (period: Period): Promise<Blob> => {
     const res = await fetch(`${BASE}/export?period=${encodeURIComponent(period)}`);
     if (!res.ok) {
