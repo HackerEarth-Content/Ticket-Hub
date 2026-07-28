@@ -151,13 +151,11 @@ async def _fetch_nps_responses(session: AsyncSession, period: str) -> list[dict]
 
 async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
     tickets = await _fetch_tickets(session, period)
-    nps_responses = await _fetch_nps_responses(session, period)
     agents = await utils.get_agent_kpis(session, period)
 
     summary = await utils.get_summary(session, period)
     sla = await utils.get_sla_kpis(session, period)
     csat = await utils.get_csat(session, period)
-    nps = await utils.get_nps(session, period)
     data_quality = await utils.get_data_quality(session, period)
     backline_overview = await backline.get_backline_overview(session, period)
     frt = await frontline.get_frontline_frt(session, period)
@@ -170,7 +168,6 @@ async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
         ("Summary", summary),
         ("SLA", sla),
         ("CSAT", csat),
-        ("NPS", nps),
         ("Data quality", data_quality),
         ("Backline overview", backline_overview),
         # Per-owner breakdown is covered by the Agents sheet instead.
@@ -181,8 +178,23 @@ async def build_export_workbook(session: AsyncSession, period: str) -> bytes:
     _autosize(ws_summary)
 
     _write_table(wb.create_sheet("Tickets"), tickets)
-    _write_table(wb.create_sheet("NPS Responses"), nps_responses)
     _write_table(wb.create_sheet("Agents"), agents)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+async def build_nps_workbook(session: AsyncSession, period: str) -> bytes:
+    """NPS-only counterpart to build_export_workbook -- raw response rows,
+    split out so the NPS card's own download button doesn't require pulling
+    the whole helpdesk export."""
+    nps_responses = await _fetch_nps_responses(session, period)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "NPS Responses"
+    _write_table(ws, nps_responses)
 
     buffer = io.BytesIO()
     wb.save(buffer)

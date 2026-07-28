@@ -47,6 +47,7 @@ export default function App() {
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [refreshTick, setRefreshTick] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [exportingNps, setExportingNps] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const { user, logout } = useAuth();
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
@@ -80,6 +81,21 @@ export default function App() {
       URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleExportNps() {
+    setExportingNps(true);
+    try {
+      const blob = await api.exportNps(period);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `nps-report-${period.replace(/:/g, "_")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingNps(false);
     }
   }
 
@@ -168,7 +184,15 @@ export default function App() {
             />
           </div>
 
-          <SectionHeading title="NPS" color="var(--accent-green)" />
+          <SectionHeading
+            title="NPS"
+            color="var(--accent-green)"
+            action={
+              <button className="section-action" onClick={handleExportNps} disabled={exportingNps}>
+                {exportingNps ? "⏳ Exporting…" : "⬇️ Download Excel"}
+              </button>
+            }
+          />
           <NpsCard
             nps={data?.nps ?? null}
             loading={loading}

@@ -266,6 +266,19 @@ async def customers_details(period: str = PeriodParam, session: AsyncSession = D
     return await customers.get_customer_details(session, period)
 
 
+@router.get("/nps/export")
+async def nps_export(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    """Excel of NPS responses -- shown on the (open) overview tab, so it
+    shares that tab's gating rather than /export's."""
+    content = await export.build_nps_workbook(session, period)
+    filename = f"nps-report-{period.replace(':', '_')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/slack/issues")
 async def slack_issues_route(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     return await slack_issues.get_slack_issues(session, period)

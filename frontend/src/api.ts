@@ -153,6 +153,13 @@ export const api = {
     }
     return res.blob();
   },
+  exportNps: async (period: Period): Promise<Blob> => {
+    const res = await fetch(`${BASE}/nps/export?period=${encodeURIComponent(period)}`);
+    if (!res.ok) {
+      throw new ApiError(`GET /nps/export failed: ${res.status} ${res.statusText}`, res.status);
+    }
+    return res.blob();
+  },
 };
 
 export { ApiError };
