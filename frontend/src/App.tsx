@@ -253,9 +253,11 @@ export default function App() {
             <CustomerStatusCard data={data?.customerStatus ?? null} loading={loading} />
           </div>
           <CustomerResolverCard data={data?.customerDetails ?? null} loading={loading} />
-          <div style={{ marginTop: 14 }}>
-            <CustomerHealthTable data={data?.customerDetails ?? null} loading={loading} />
-          </div>
+          {user && (
+            <div style={{ marginTop: 14 }}>
+              <CustomerHealthTable data={data?.customerDetails ?? null} loading={loading} />
+            </div>
+          )}
         </>
       )}
 

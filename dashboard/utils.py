@@ -340,7 +340,10 @@ async def get_module_distribution(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
         select(Ticket.module, func.count())
-        .where(Ticket.created_at.between(period_start, period_end))
+        .where(
+            Ticket.created_at.between(period_start, period_end),
+            Ticket.module != "Non-Actionable",
+        )
         .group_by(Ticket.module)
     )
     return {"ticket_count_by_module": dict(rows.all())}
@@ -357,9 +360,12 @@ async def get_module_tickets(session: AsyncSession, period: str) -> dict:
     chart -- most recent first, capped per module."""
     period_start, period_end = resolve_period(period)
     in_period = Ticket.created_at.between(period_start, period_end)
+    not_non_actionable = Ticket.module != "Non-Actionable"
 
     modules = await session.execute(
-        select(Ticket.module, func.count()).where(in_period).group_by(Ticket.module)
+        select(Ticket.module, func.count())
+        .where(in_period, not_non_actionable)
+        .group_by(Ticket.module)
     )
 
     tickets_by_module = {}
