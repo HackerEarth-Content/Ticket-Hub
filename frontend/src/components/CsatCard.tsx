@@ -43,14 +43,7 @@ export function CsatCard({ csat, loading }: Props) {
       ) : items.length === 0 ? (
         <div className="card-sub">No CSAT responses in this period.</div>
       ) : (
-        <>
-          <BarList items={items} />
-          {csat && csat.unmatched_to_ticket_count > 0 && (
-            <div className="card-sub" style={{ marginTop: 10 }}>
-              {csat.unmatched_to_ticket_count} response(s) couldn't be matched to a ticket
-            </div>
-          )}
-        </>
+        <BarList items={items} />
       )}
     </div>
   );
