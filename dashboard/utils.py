@@ -336,17 +336,42 @@ async def get_stage_distribution(
     return {"ticket_count_by_pipeline_and_stage": breakdown}
 
 
+# "Volume by module" and its drilldown group by HubSpot's own native "module"
+# dropdown (hubspot_module), not the category-taxonomy-derived Ticket.module
+# -- see handoff.md open question #4, the taxonomy is an unsigned-off draft.
+# Google - Big code tickets are dropped entirely (not a real support module);
+# everything with no dropdown value set is folded into one "Not set" bucket.
+_MODULE_NOT_SET_LABEL = "Not set"
+_MODULE_EXCLUDED = "Google - Big code"
+
+# HubSpot dropdown options whose display label was renamed without changing
+# the option's internal value -- tickets (old and new) still store the old
+# internal value, so it's remapped here to what the team actually sees in
+# HubSpot today.
+_MODULE_LABEL_MAP = {
+    "Programs": "Hackathon",
+    "Helix": "OnScreen",
+    "Recruiter Profile": "Recruiter Settings",
+    "NA": "Not Actionable",
+}
+
+
 async def get_module_distribution(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
+    module_label = func.coalesce(Ticket.hubspot_module, _MODULE_NOT_SET_LABEL)
     rows = await session.execute(
-        select(Ticket.module, func.count())
+        select(module_label, func.count())
         .where(
             Ticket.created_at.between(period_start, period_end),
-            Ticket.module != "Non-Actionable",
+            Ticket.hubspot_module.is_distinct_from(_MODULE_EXCLUDED),
         )
-        .group_by(Ticket.module)
+        .group_by(module_label)
     )
-    return {"ticket_count_by_module": dict(rows.all())}
+    return {
+        "ticket_count_by_module": {
+            _MODULE_LABEL_MAP.get(label, label): count for label, count in rows.all()
+        }
+    }
 
 
 # Same cap/shape convention as the anomaly/uncategorized drill-downs
@@ -360,23 +385,29 @@ async def get_module_tickets(session: AsyncSession, period: str) -> dict:
     chart -- most recent first, capped per module."""
     period_start, period_end = resolve_period(period)
     in_period = Ticket.created_at.between(period_start, period_end)
-    not_non_actionable = Ticket.module != "Non-Actionable"
+    not_excluded = Ticket.hubspot_module.is_distinct_from(_MODULE_EXCLUDED)
+    module_label = func.coalesce(Ticket.hubspot_module, _MODULE_NOT_SET_LABEL)
 
     modules = await session.execute(
-        select(Ticket.module, func.count())
-        .where(in_period, not_non_actionable)
-        .group_by(Ticket.module)
+        select(module_label, func.count())
+        .where(in_period, not_excluded)
+        .group_by(module_label)
     )
 
     tickets_by_module = {}
     for module, total in modules.all():
+        module_filter = (
+            Ticket.hubspot_module.is_(None)
+            if module == _MODULE_NOT_SET_LABEL
+            else Ticket.hubspot_module == module
+        )
         rows = await session.execute(
             select(Ticket.ticket_id, Ticket.subject, Ticket.canonical_status, Ticket.owner_name)
-            .where(in_period, Ticket.module == module)
+            .where(in_period, module_filter)
             .order_by(Ticket.created_at.desc())
             .limit(_DRILLDOWN_LIMIT)
         )
-        tickets_by_module[module] = {
+        tickets_by_module[_MODULE_LABEL_MAP.get(module, module)] = {
             "count": total,
             "tickets": [
                 {
