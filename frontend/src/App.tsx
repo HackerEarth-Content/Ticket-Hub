@@ -271,7 +271,7 @@ export default function App() {
               emptyLabel="No Slack-reported issues in this period."
               items={[
                 {
-                  label: "Content",
+                  label: "Content Requests",
                   value: data?.slackIssues?.tickets_by_workflow_category.content.count ?? 0,
                   color: "var(--accent-magenta)",
                 },

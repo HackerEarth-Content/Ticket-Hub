@@ -190,6 +190,7 @@ export interface SlackIssue {
   owner_name: string | null;
   stage_label: string;
   created_at: string | null;
+  closed_at: string | null;
   priority: string;
   team: string;
   channel: string;
