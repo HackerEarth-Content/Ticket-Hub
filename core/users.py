@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import dotenv_values
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 from fastapi_users import BaseUserManager, FastAPIUsers
 from fastapi.responses import RedirectResponse
 from fastapi_users.authentication import (
@@ -22,6 +22,10 @@ SECRET = settings.USER_SECRET
 
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+
+
+class OAuthNotAllowedError(Exception):
+    """Raised when an authenticated Google account isn't on ALLOWED_EMAILS."""
 
 
 def _is_email_allowed(email: str) -> bool:
@@ -76,10 +80,7 @@ class UserManager(BaseUserManager[User, str]):
     ):
         if not _is_email_allowed(account_email):
             print(f"OAuth callback rejected: {account_email} is not on the allowlist")
-            raise HTTPException(
-                status_code=403,
-                detail="This Google account isn't authorized to access this dashboard.",
-            )
+            raise OAuthNotAllowedError(account_email)
 
         print(f"OAuth callback started for {account_email}")
         try:

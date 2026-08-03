@@ -54,6 +54,16 @@ export default function App() {
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
   const { live, sync, loading: liveLoading, syncing, syncError, syncNow } = useLiveStatus();
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("authError") === "not_allowed") {
+      window.alert("Only allowed users can access this dashboard.");
+      params.delete("authError");
+      const rest = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    }
+  }, []);
+
   // The status poll (60s) notices when the backend's 5-min scheduled sync
   // lands; refetch the dashboard data then, instead of on a blind timer.
   // The ref skips the first non-null value so mount doesn't double-fetch.

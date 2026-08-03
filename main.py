@@ -6,13 +6,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.config import settings
 from core.database import db_manager
-from core.users import fastapi_users
+from core.users import fastapi_users, OAuthNotAllowedError
 from core.scheduler import start_scheduler
 
 from api.dashboard_routes import router as dashboard_router
@@ -48,6 +49,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# A user who isn't on ALLOWED_EMAILS reaches this mid-OAuth-flow -- send them
+# back to the frontend (not a bare JSON error) with a flag it can pop up.
+@app.exception_handler(OAuthNotAllowedError)
+async def oauth_not_allowed_handler(request: Request, exc: OAuthNotAllowedError):
+    return RedirectResponse(f"{settings.FRONTEND_URL}?authError=not_allowed", status_code=302)
 
 # Include API routers
 app.include_router(auth_router, prefix="/api")
