@@ -26,14 +26,16 @@ from dashboard.utils import (
 _TOP_N_CUSTOMERS = 15
 
 
-async def _top_customer_names(session: AsyncSession, in_period, limit: int) -> list[str]:
-    rows = await session.execute(
+async def _top_customer_names(session: AsyncSession, in_period, limit: int | None) -> list[str]:
+    query = (
         select(Ticket.customer_name, func.count())
         .where(in_period, Ticket.customer_name.isnot(None))
         .group_by(Ticket.customer_name)
         .order_by(func.count().desc())
-        .limit(limit)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    rows = await session.execute(query)
     return [name for name, _ in rows.all()]
 
 
@@ -73,6 +75,7 @@ async def get_customer_ticket_volume(session: AsyncSession, period: str) -> dict
 
     return {
         "top_customers": identified[:_TOP_N_CUSTOMERS],
+        "all_customers": identified,
         "other_identified_customer_count": max(0, len(identified) - _TOP_N_CUSTOMERS),
         "other_identified_ticket_count": identified_total
         - sum(r["ticket_count"] for r in identified[:_TOP_N_CUSTOMERS]),
@@ -84,18 +87,21 @@ async def get_customer_ticket_volume(session: AsyncSession, period: str) -> dict
 
 
 async def get_customer_status_breakdown(session: AsyncSession, period: str) -> dict:
-    """Per top-N customer: counts by canonical_status (few categories, for
-    the stacked-bar chart) and by the more granular stage_label (for the
+    """Per identified customer: counts by canonical_status (few categories,
+    for the stacked-bar chart) and by the more granular stage_label (for the
     drill-down table) -- same status/stage split the rest of this dashboard
-    already uses (see /distribution/status vs /distribution/stage)."""
+    already uses (see /distribution/status vs /distribution/stage). Returns
+    both the top-N slice and the full list, same "all_customers" split as
+    get_customer_ticket_volume, so the sibling "Tickets by customer" card's
+    show-all toggle can expand this chart in lockstep with no extra request."""
     period_start, period_end = resolve_period(period)
     in_period = Ticket.created_at.between(period_start, period_end)
 
-    top_customers = await _top_customer_names(session, in_period, _TOP_N_CUSTOMERS)
-    if not top_customers:
-        return {"customers": []}
+    all_names = await _top_customer_names(session, in_period, None)
+    if not all_names:
+        return {"customers": [], "all_customers": []}
 
-    scoped = in_period, Ticket.customer_name.in_(top_customers)
+    scoped = in_period, Ticket.customer_name.in_(all_names)
 
     status_rows = await session.execute(
         select(Ticket.customer_name, Ticket.canonical_status, func.count())
@@ -110,7 +116,7 @@ async def get_customer_status_breakdown(session: AsyncSession, period: str) -> d
 
     by_customer = {
         name: {"customer_name": name, "status_counts": {}, "stage_counts": {}}
-        for name in top_customers
+        for name in all_names
     }
     for name, status, count in status_rows.all():
         by_customer[name]["status_counts"][status] = count
@@ -118,7 +124,8 @@ async def get_customer_status_breakdown(session: AsyncSession, period: str) -> d
         by_customer[name]["stage_counts"][stage] = count
 
     # Preserve volume-descending order -- the frontend renders top-to-bottom.
-    return {"customers": [by_customer[name] for name in top_customers]}
+    all_entries = [by_customer[name] for name in all_names]
+    return {"customers": all_entries[:_TOP_N_CUSTOMERS], "all_customers": all_entries}
 
 
 async def get_customer_details(session: AsyncSession, period: str) -> dict:

@@ -365,6 +365,7 @@ export interface CustomerVolumeEntry {
 
 export interface CustomerVolume {
   top_customers: CustomerVolumeEntry[];
+  all_customers: CustomerVolumeEntry[];
   other_identified_customer_count: number;
   other_identified_ticket_count: number;
   identified_customer_count: number;
@@ -381,6 +382,7 @@ export interface CustomerStatusEntry {
 
 export interface CustomerStatusBreakdown {
   customers: CustomerStatusEntry[];
+  all_customers: CustomerStatusEntry[];
 }
 
 export interface SourceDistribution {

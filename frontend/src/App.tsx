@@ -45,6 +45,7 @@ import type { Period } from "./types";
 export default function App() {
   const [period, setPeriod] = useState<Period>("week");
   const [tab, setTab] = useState<DashboardTab>("overview");
+  const [showAllCustomerAccounts, setShowAllCustomerAccounts] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportingNps, setExportingNps] = useState(false);
@@ -249,8 +250,17 @@ export default function App() {
           />
           <CustomerOverviewCard data={data?.customerVolume ?? null} loading={loading} />
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
-            <CustomerVolumeCard data={data?.customerVolume ?? null} loading={loading} />
-            <CustomerStatusCard data={data?.customerStatus ?? null} loading={loading} />
+            <CustomerVolumeCard
+              data={data?.customerVolume ?? null}
+              loading={loading}
+              showAll={showAllCustomerAccounts}
+              onToggleAll={setShowAllCustomerAccounts}
+            />
+            <CustomerStatusCard
+              data={data?.customerStatus ?? null}
+              loading={loading}
+              showAll={showAllCustomerAccounts}
+            />
           </div>
           <CustomerResolverCard data={data?.customerDetails ?? null} loading={loading} />
           {user && (

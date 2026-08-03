@@ -6,6 +6,8 @@ import { formatNumber } from "../format";
 interface Props {
   data: CustomerVolume | null;
   loading: boolean;
+  showAll: boolean;
+  onToggleAll: (showAll: boolean) => void;
 }
 
 const ROW_HEIGHT = 30;
@@ -28,9 +30,9 @@ function VolumeTooltip({ active, payload }: any) {
 /** Ranked magnitude across many accounts -- a single hue (not per-customer
  * categorical colors, these aren't distinct "series"), top-N with the long
  * tail folded into the footer counts instead of an unbounded list. */
-export function CustomerVolumeCard({ data, loading }: Props) {
+export function CustomerVolumeCard({ data, loading, showAll, onToggleAll }: Props) {
   const [showTable, setShowTable] = useState(false);
-  const rows = data?.top_customers ?? [];
+  const rows = (showAll ? data?.all_customers : data?.top_customers) ?? [];
   const chartHeight = Math.max(MIN_CHART_HEIGHT, rows.length * ROW_HEIGHT);
 
   return (
@@ -38,7 +40,9 @@ export function CustomerVolumeCard({ data, loading }: Props) {
       <div className="card-head">
         <div>
           <div className="card-title">Tickets by customer</div>
-          <div className="card-sub">Top {rows.length || ""} accounts by volume this period</div>
+          <div className="card-sub">
+            {showAll ? "All" : "Top"} {rows.length || ""} accounts by volume this period
+          </div>
         </div>
         {rows.length > 0 && (
           <button className="table-toggle" onClick={() => setShowTable((v) => !v)}>
@@ -101,15 +105,15 @@ export function CustomerVolumeCard({ data, loading }: Props) {
           </BarChart>
         </ResponsiveContainer>
       )}
-      {!loading && data && (
-        <div className="card-sub" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-          {data.other_identified_customer_count > 0 && (
-            <span>
-              +{formatNumber(data.other_identified_customer_count)} more identified accounts (
-              {formatNumber(data.other_identified_ticket_count)} tickets)
-            </span>
-          )}
-          <span>{formatNumber(data.no_account_ticket_count)} tickets with no identified account</span>
+      {!loading && data && data.other_identified_customer_count > 0 && (
+        <div className="card-sub" style={{ marginTop: 12 }}>
+          <button className="table-toggle" style={{ padding: 0 }} onClick={() => onToggleAll(!showAll)}>
+            {showAll
+              ? "Show top 15 only"
+              : `+${formatNumber(data.other_identified_customer_count)} more identified accounts (${formatNumber(
+                  data.other_identified_ticket_count
+                )} tickets)`}
+          </button>
         </div>
       )}
     </div>
