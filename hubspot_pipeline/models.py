@@ -138,6 +138,7 @@ class DashboardTicket(BaseModel):
     owner_name: str | None
     owner_assigned_at: str | None  # hubspot_owner_assigneddate, ISO string
     source_type: str | None
+    record_source: str | None  # hs_object_source -- e.g. CRM_UI/CONVERSATIONS/IMPORT/BOT
     reporter_contact_name: str | None  # parsed from ticket content, see _extract_reported_by
     slack_workflow: str | None  # parsed from ticket content, see _extract_workflow
     slack_channel: str | None  # parsed from ticket content, see _extract_channel
@@ -187,6 +188,7 @@ class DashboardTicket(BaseModel):
 
         final_resolution = props.get("final_resolution") or None
         source_type = props.get("source_type") or None
+        record_source = props.get("hs_object_source") or None
 
         stage_timings = {
             stage_key: {
@@ -220,6 +222,7 @@ class DashboardTicket(BaseModel):
             owner_name=(owners or {}).get(owner_id) if owner_id else None,
             owner_assigned_at=props.get("hubspot_owner_assigneddate"),
             source_type=source_type,
+            record_source=record_source,
             # Slack-only: the "Reported By:" line is a convention of the
             # Slack ticket-creation flow, not a general description format --
             # extracting it from other sources' descriptions would be noise,

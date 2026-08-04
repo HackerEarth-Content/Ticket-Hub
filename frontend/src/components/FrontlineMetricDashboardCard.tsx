@@ -83,23 +83,24 @@ export function FrontlineMetricDashboardCard({ data, loading }: Props) {
           <thead>
             <tr>
               <th className="fmd-sticky-col"></th>
+              <th className="fmd-sticky-target"></th>
               {data.quarters.map((q) => (
-                <th key={q.code} className="fmd-quarter-head" colSpan={5}>
+                <th key={q.code} className="fmd-quarter-head" colSpan={4}>
                   {q.label}
                 </th>
               ))}
             </tr>
             <tr>
               <th className="fmd-sticky-col">Metric</th>
+              <th className="num fmd-sticky-target">Target</th>
               {data.quarters.map((q) => (
                 <Fragment key={q.code}>
-                  <th className="num fmd-quarter-start">Target</th>
                   {q.month_labels.map((label, i) => (
-                    <th key={i} className="num">
+                    <th key={i} className={`num fmd-month-head ${i === 0 ? "fmd-quarter-start" : ""}`}>
                       {label}
                     </th>
                   ))}
-                  <th className="num">Achieved</th>
+                  <th className="num fmd-achieved-head">Achieved</th>
                 </Fragment>
               ))}
             </tr>
@@ -107,15 +108,18 @@ export function FrontlineMetricDashboardCard({ data, loading }: Props) {
           <tbody>
             {group.metrics.map((metric) => (
               <tr key={metric.key}>
-                <td className="fmd-sticky-col">{metric.label}</td>
+                <td className="fmd-sticky-col" title={metric.note}>
+                  {metric.label}
+                  {metric.note ? <span className="fmd-note-marker"> *</span> : null}
+                </td>
+                <td className="num fmd-sticky-target">{metric.target}</td>
                 {data.quarters.map((q) => {
                   const achievedValue = (q.achieved as FrontlineMetricValues)[metric.key] ?? null;
                   const tone = toneForTarget(achievedValue, metric.target);
                   return (
                     <Fragment key={q.code}>
-                      <td className="num fmd-quarter-start">{metric.target}</td>
                       {q.months.map((month, i) => (
-                        <td key={i} className="num">
+                        <td key={i} className={`num fmd-month ${i === 0 ? "fmd-quarter-start" : ""}`}>
                           {formatMetricValue(month[metric.key] ?? null, metric.format)}
                         </td>
                       ))}

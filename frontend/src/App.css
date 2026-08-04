@@ -955,38 +955,96 @@ footer.note {
 .fmd-table {
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 .fmd-table th,
 .fmd-table td {
   white-space: nowrap;
-  padding: 10px 14px;
+  padding: 9px 14px;
 }
-.fmd-sticky-col {
+.fmd-table thead th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* Metric name + Target are each their own sticky column, at fixed widths so
+   the second one's `left` offset lines up exactly with the first's width --
+   both stay pinned together while the quarters scroll underneath them. */
+.fmd-table td.fmd-sticky-col,
+.fmd-table th.fmd-sticky-col {
   position: sticky;
   left: 0;
-  z-index: 1;
+  z-index: 2;
+  background: var(--surface);
+  white-space: normal;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+}
+.fmd-note-marker {
+  color: var(--accent-aqua);
+  cursor: help;
+}
+.fmd-sticky-target {
+  position: sticky;
+  left: 260px;
+  z-index: 2;
   background: var(--surface);
   border-right: 1px solid var(--line);
-  white-space: normal;
-  min-width: 260px;
-  max-width: 340px;
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
+  color: var(--ink-3);
+  font-size: 11.5px;
 }
 .fmd-quarter-head {
   text-align: center;
   border-bottom: 1px solid var(--line);
   border-left: 1px solid var(--line);
+  background: var(--surface-2);
 }
 th.fmd-quarter-start,
 td.fmd-quarter-start {
   border-left: 1px solid var(--line);
 }
-.fmd-achieved {
-  font-weight: 650;
+/* Month columns are supporting detail -- dimmed relative to Achieved, which
+   is the number the target/tone coloring is actually judging. */
+.fmd-month,
+.fmd-month-head {
+  color: var(--ink-3);
 }
-.fmd-achieved.fmd-good {
+.fmd-month {
+  font-size: 12px;
+}
+.fmd-achieved-head,
+.fmd-table td.fmd-achieved {
+  /* Mixed against an opaque surface, not `transparent` -- a translucent
+     background here lets whatever scrolled underneath the sticky columns
+     show through at the seam. */
+  background: color-mix(in srgb, var(--accent-aqua) 7%, var(--surface));
+}
+.fmd-table td.fmd-achieved {
+  font-weight: 650;
+  color: var(--ink);
+}
+.fmd-table td.fmd-achieved.fmd-good {
   color: var(--status-good);
 }
-.fmd-achieved.fmd-critical {
+.fmd-table td.fmd-achieved.fmd-critical {
   color: var(--status-critical);
+}
+.fmd-table tbody tr:nth-child(even) td {
+  background: var(--surface-2);
+}
+.fmd-table tbody tr:nth-child(even) td.fmd-achieved {
+  background: color-mix(in srgb, var(--accent-aqua) 11%, var(--surface-2));
+}
+.fmd-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+.fmd-table tbody tr:hover td.fmd-achieved {
+  background: color-mix(in srgb, var(--accent-aqua) 14%, var(--surface-2));
 }

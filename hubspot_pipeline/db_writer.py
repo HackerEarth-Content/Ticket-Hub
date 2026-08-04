@@ -38,8 +38,8 @@ def _to_row(t: DashboardTicket) -> dict:
     return row
 
 
-# Postgres caps a single query at 65535 bound parameters; Ticket has 34
-# columns, so keep well under 65535/34 per statement.
+# Postgres caps a single query at 65535 bound parameters; Ticket has 35
+# columns, so keep well under 65535/35 per statement.
 _BATCH_SIZE = 1000
 
 

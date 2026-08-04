@@ -27,7 +27,6 @@ from core.orm import CsatResponse, NpsResponse, Ticket
 from dashboard import frontline, utils
 from dashboard.utils import _normalized_csat_percentage, _percentage, _resolution_time_hours_expr, resolve_period
 from hubspot_pipeline.resolution_map import UNRESOLVED_BUCKET
-from hubspot_pipeline.stage_timing import BUG_BOUNTY_PATH
 
 _IST = ZoneInfo("Asia/Kolkata")
 
@@ -138,22 +137,14 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     frt = await frontline.get_frontline_frt(session, period)
     fcr = await frontline.get_frontline_fcr(session, period)
     summary = await utils.get_summary(session, period)
-    sla = await utils.get_sla_kpis(session, period)
     ownership = await frontline.get_frontline_resolution_ownership(session, period)
     csat_raised = await utils.get_csat(session, period)
     csat_overall = await _get_csat_overall(session, period_start, period_end)
     nps = await utils.get_nps(session, period)
     nps_mean = await _get_nps_mean_score(session, period_start, period_end)
     engineering = await _ttr_block(session, period_start, period_end, Ticket.resolution_bucket == "Engineering")
-    backline_incl = await _ttr_block(
+    backline = await _ttr_block(
         session, period_start, period_end, Ticket.resolution_bucket == "Backline Engineering"
-    )
-    backline_excl = await _ttr_block(
-        session,
-        period_start,
-        period_end,
-        Ticket.resolution_bucket == "Backline Engineering",
-        Ticket.backline_path.is_distinct_from(BUG_BOUNTY_PATH),
     )
 
     actionable_total = await session.scalar(
@@ -164,7 +155,23 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     created_total = await session.scalar(
         select(func.count()).where(Ticket.created_at.between(period_start, period_end))
     )
-    overdue_count = sla["resolution_sla_status_breakdown"].get("Completed late", 0)
+    # Automation, Passed-On (Passed to AM / Passed to Other Team), and
+    # CRM-UI-created tickets count as on-time, never overdue, per 2026-08-04
+    # request -- automation often closes tickets in a batch sweep well after
+    # they were created, a passed-on ticket is no longer frontline's SLA to
+    # answer for, and a ticket manually logged via the CRM UI (as opposed to
+    # a real inbound channel) doesn't have a genuine "customer waiting"
+    # clock either. None of the three should be judged against the close SLA
+    # clock. They still count in the total below (counted as on-time, not
+    # excluded).
+    overdue_count = await session.scalar(
+        select(func.count()).where(
+            Ticket.created_at.between(period_start, period_end),
+            Ticket.sla_close_status == "Completed late",
+            Ticket.resolution_bucket.notin_(["Automation", "Passed On"]),
+            Ticket.record_source.is_distinct_from("CRM_UI"),
+        )
+    )
 
     bucket_counts = ownership["ticket_count_by_resolution_bucket"]
     resolved_total = sum(count for bucket, count in bucket_counts.items() if bucket != UNRESOLVED_BUCKET)
@@ -177,7 +184,7 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "actionable_tickets": actionable_total or 0,
         "frt_on_time_count": frt["on_time_count"],
         "frt_missed_count": frt["missed_count"],
-        "overdue_tickets": overdue_count,
+        "overdue_tickets": overdue_count or 0,
         "frt_on_time_percentage": frt["on_time_percentage"],
         "frt_missed_percentage": _percentage(frt["missed_count"], frt["on_time_count"] + frt["missed_count"]),
         "overdue_percentage": _percentage(overdue_count, created_total),
@@ -217,23 +224,25 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "nps_detractor_percentage": _percentage(nps["detractor_count"], nps["total_response_count"]),
         "nps_score": nps["nps_score"],
         "nps_mean_score": nps_mean,
-        "engineering_resolved_count": engineering["count"],
+        # engineering["count"]/backline["count"] aren't exposed here -- they'd
+        # just repeat resolved_by_engineering_count/resolved_by_backline_count
+        # above (this dict's TTR rows add the *timing* view: how fast, not
+        # how many, which the ownership rows already cover).
         "engineering_resolved_within_3_days_count": engineering["within_3_days_count"],
         "engineering_resolved_within_3_days_percentage": engineering["within_3_days_percentage"],
         "engineering_mttr_hours": engineering["mean_hours"],
         "engineering_mttr_days": engineering["mean_days"],
-        "backline_incl_bug_bounty_resolved_count": backline_incl["count"],
-        "backline_incl_bug_bounty_within_3_days_count": backline_incl["within_3_days_count"],
-        "backline_incl_bug_bounty_within_3_days_percentage": backline_incl["within_3_days_percentage"],
-        "backline_incl_bug_bounty_mttr_hours": backline_incl["mean_hours"],
-        "backline_incl_bug_bounty_mttr_days": backline_incl["mean_days"],
-        "backline_excl_bug_bounty_resolved_count": backline_excl["count"],
-        "backline_excl_bug_bounty_within_3_days_count": backline_excl["within_3_days_count"],
-        "backline_excl_bug_bounty_within_3_days_percentage": backline_excl["within_3_days_percentage"],
-        "backline_excl_bug_bounty_mttr_hours": backline_excl["mean_hours"],
-        "backline_excl_bug_bounty_mttr_days": backline_excl["mean_days"],
+        "backline_resolved_within_3_days_count": backline["within_3_days_count"],
+        "backline_resolved_within_3_days_percentage": backline["within_3_days_percentage"],
+        "backline_mttr_hours": backline["mean_hours"],
+        "backline_mttr_days": backline["mean_days"],
     }
 
+
+_OVERDUE_NOTE = (
+    "Automation, Passed On (Passed to AM / Passed to Other Team), and "
+    "CRM-UI-created tickets always count as on-time, never overdue."
+)
 
 # Static schema for the card: group/metric labels, display format, and the
 # business-goal target for each row. Targets are config, not observed data --
@@ -246,10 +255,10 @@ METRIC_GROUPS: list[dict] = [
             {"key": "actionable_tickets", "label": "# of actionable tickets", "format": "number", "target": "-"},
             {"key": "frt_on_time_count", "label": "# of on-time FRT SLA (30 min) tickets", "format": "number", "target": "-"},
             {"key": "frt_missed_count", "label": "# of missed FRT SLA tickets", "format": "number", "target": "-"},
-            {"key": "overdue_tickets", "label": "# of overdue tickets", "format": "number", "target": "-"},
+            {"key": "overdue_tickets", "label": "# of overdue tickets", "format": "number", "target": "-", "note": _OVERDUE_NOTE},
             {"key": "frt_on_time_percentage", "label": "% of on-time FRT SLA (30 min) tickets", "format": "percent", "target": ">=80%"},
             {"key": "frt_missed_percentage", "label": "% of missed FRT SLA tickets", "format": "percent", "target": "<=20%"},
-            {"key": "overdue_percentage", "label": "% of overdue tickets", "format": "percent", "target": "<=1%"},
+            {"key": "overdue_percentage", "label": "% of overdue tickets", "format": "percent", "target": "<=1%", "note": _OVERDUE_NOTE},
         ],
     },
     {
@@ -318,21 +327,14 @@ METRIC_GROUPS: list[dict] = [
         "key": "ttr_by_team",
         "label": "TTR by Resolving Team",
         "metrics": [
-            {"key": "engineering_resolved_count", "label": "Engineering: # resolved", "format": "number", "target": "-"},
             {"key": "engineering_resolved_within_3_days_count", "label": "Engineering: # resolved <3 days", "format": "number", "target": "-"},
             {"key": "engineering_resolved_within_3_days_percentage", "label": "Engineering: % resolved <3 days", "format": "percent", "target": ">=80%"},
             {"key": "engineering_mttr_hours", "label": "Engineering: MTTR (hrs)", "format": "hours", "target": "<=72 Hrs"},
             {"key": "engineering_mttr_days", "label": "Engineering: MTTR (days)", "format": "days", "target": "<=3 Days"},
-            {"key": "backline_incl_bug_bounty_resolved_count", "label": "Backline (incl. Bug Bounty): # resolved", "format": "number", "target": "-"},
-            {"key": "backline_incl_bug_bounty_within_3_days_count", "label": "Backline (incl. Bug Bounty): # resolved <3 days", "format": "number", "target": "-"},
-            {"key": "backline_incl_bug_bounty_within_3_days_percentage", "label": "Backline (incl. Bug Bounty): % resolved <3 days", "format": "percent", "target": ">=80%"},
-            {"key": "backline_incl_bug_bounty_mttr_hours", "label": "Backline (incl. Bug Bounty): MTTR (hrs)", "format": "hours", "target": "<=72 Hrs"},
-            {"key": "backline_incl_bug_bounty_mttr_days", "label": "Backline (incl. Bug Bounty): MTTR (days)", "format": "days", "target": "<=3 Days"},
-            {"key": "backline_excl_bug_bounty_resolved_count", "label": "Backline (excl. Bug Bounty): # resolved", "format": "number", "target": "-"},
-            {"key": "backline_excl_bug_bounty_within_3_days_count", "label": "Backline (excl. Bug Bounty): # resolved <3 days", "format": "number", "target": "-"},
-            {"key": "backline_excl_bug_bounty_within_3_days_percentage", "label": "Backline (excl. Bug Bounty): % resolved <3 days", "format": "percent", "target": ">=80%"},
-            {"key": "backline_excl_bug_bounty_mttr_hours", "label": "Backline (excl. Bug Bounty): MTTR (hrs)", "format": "hours", "target": "<=72 Hrs"},
-            {"key": "backline_excl_bug_bounty_mttr_days", "label": "Backline (excl. Bug Bounty): MTTR (days)", "format": "days", "target": "<=3 Days"},
+            {"key": "backline_resolved_within_3_days_count", "label": "Backline: # resolved <3 days", "format": "number", "target": "-"},
+            {"key": "backline_resolved_within_3_days_percentage", "label": "Backline: % resolved <3 days", "format": "percent", "target": ">=80%"},
+            {"key": "backline_mttr_hours", "label": "Backline: MTTR (hrs)", "format": "hours", "target": "<=72 Hrs"},
+            {"key": "backline_mttr_days", "label": "Backline: MTTR (days)", "format": "days", "target": "<=3 Days"},
         ],
     },
 ]

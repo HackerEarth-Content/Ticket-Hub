@@ -41,6 +41,9 @@ TICKET_PROPERTIES = [
     "hs_time_to_first_response_sla_status",
     "hs_time_to_close_sla_status",
     "source_type",
+    # Record source (e.g. CRM_UI/CONVERSATIONS/IMPORT/BOT) -- verified
+    # against this portal's live property schema (2026-08-04).
+    "hs_object_source",
     # Backline/frontline reporting fields, verified live 2026-07-04.
     "final_resolution",
     "fcr",

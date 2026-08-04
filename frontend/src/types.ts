@@ -345,6 +345,7 @@ export interface FrontlineMetricDefinition {
   label: string;
   format: FrontlineMetricFormat;
   target: string;
+  note?: string;
 }
 
 export interface FrontlineMetricGroup {

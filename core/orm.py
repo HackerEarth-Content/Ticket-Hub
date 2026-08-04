@@ -67,6 +67,7 @@ class Ticket(Base):
     owner_name: Mapped[str | None]
     owner_assigned_at: Mapped[datetime | None]
     source_type: Mapped[str | None]
+    record_source: Mapped[str | None]
     reporter_contact_name: Mapped[str | None]
     slack_workflow: Mapped[str | None]
     slack_channel: Mapped[str | None]
