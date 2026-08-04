@@ -1,11 +1,12 @@
 import type { ResolutionByPriority } from "../types";
 import { BarList } from "./BarList";
 import { formatHours } from "../format";
+import { PRIORITY_ORDER, priorityDisplay } from "../priority";
 
 // Severity order -- the point is the order, not the sorted value, so this is
-// an ordinal ramp (single hue) rather than categorical.
-const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-const ORDINAL_RAMP = ["var(--ord-1)", "var(--ord-2)", "var(--ord-4)", "var(--ord-5)"];
+// an ordinal ramp (single hue) rather than categorical. Ramp is ordered to
+// match PRIORITY_ORDER (URGENT first), most-intense hue first.
+const ORDINAL_RAMP = ["var(--ord-5)", "var(--ord-4)", "var(--ord-2)", "var(--ord-1)"];
 
 // Below this many resolved tickets, a median is just 1-2 raw values --
 // one old backlog ticket closing alongside a same-day one can swing it by
@@ -22,6 +23,7 @@ export function ResolutionByPriorityCard({ data, loading }: Props) {
   const countByPriority = data?.resolved_ticket_count_by_priority ?? {};
   const items = PRIORITY_ORDER.filter((p) => p in byPriority).map((p, i) => ({
     label: p,
+    displayLabel: priorityDisplay(p),
     value: byPriority[p],
     color: ORDINAL_RAMP[i],
     displayValue: formatHours(byPriority[p]),

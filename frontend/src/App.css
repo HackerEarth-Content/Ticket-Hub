@@ -926,3 +926,67 @@ footer.note {
   height: 8px;
   border-radius: 2px;
 }
+
+/* ---- frontline metric dashboard ---- */
+.fmd-group-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.fmd-group-btn {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.fmd-group-btn:hover {
+  color: var(--ink);
+}
+.fmd-group-btn.active {
+  background: var(--accent-aqua);
+  border-color: var(--accent-aqua);
+  color: var(--surface);
+}
+.fmd-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+.fmd-table th,
+.fmd-table td {
+  white-space: nowrap;
+  padding: 10px 14px;
+}
+.fmd-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  white-space: normal;
+  min-width: 260px;
+  max-width: 340px;
+}
+.fmd-quarter-head {
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+th.fmd-quarter-start,
+td.fmd-quarter-start {
+  border-left: 1px solid var(--line);
+}
+.fmd-achieved {
+  font-weight: 650;
+}
+.fmd-achieved.fmd-good {
+  color: var(--status-good);
+}
+.fmd-achieved.fmd-critical {
+  color: var(--status-critical);
+}

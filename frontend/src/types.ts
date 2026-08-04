@@ -338,6 +338,36 @@ export interface DataQuality {
   uncategorized_ticket_percentage: number | null;
 }
 
+export type FrontlineMetricFormat = "number" | "percent" | "hours" | "days" | "score";
+
+export interface FrontlineMetricDefinition {
+  key: string;
+  label: string;
+  format: FrontlineMetricFormat;
+  target: string;
+}
+
+export interface FrontlineMetricGroup {
+  key: string;
+  label: string;
+  metrics: FrontlineMetricDefinition[];
+}
+
+export type FrontlineMetricValues = Record<string, number | null>;
+
+export interface FrontlineMetricQuarter {
+  code: string;
+  label: string;
+  month_labels: string[];
+  months: FrontlineMetricValues[];
+  achieved: FrontlineMetricValues;
+}
+
+export interface FrontlineMetricDashboard {
+  quarters: FrontlineMetricQuarter[];
+  groups: FrontlineMetricGroup[];
+}
+
 export interface SyncStatus {
   last_synced_at: string | null;
   total_ticket_count: number;

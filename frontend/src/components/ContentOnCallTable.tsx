@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { SlackIssue, SlackIssues, SlackWorkflowTicketGroup } from "../types";
 import { hubspotTicketUrl } from "../format";
+import { PRIORITY_ORDER, priorityDisplay } from "../priority";
 
 interface Props {
   data: SlackIssues | null;
@@ -54,7 +55,7 @@ export function IssueTable({ rows }: { rows: SlackIssue[] }) {
               <td>{issue.owner_name ?? "—"}</td>
               <td>
                 <span className={`chip ${PRIORITY_CHIP[issue.priority] ?? "neutral"}`}>
-                  {issue.priority}
+                  {priorityDisplay(issue.priority)}
                 </span>
               </td>
               <td>{issue.stage_label}</td>
@@ -81,9 +82,6 @@ const STATUS_SORT_LABELS: Record<StatusSort, string> = {
   default: "Sort: Newest",
   stage_label: "Sort: Status",
 };
-
-// Severity order, not alphabetical -- same ramp as SlackPriorityCard/SlackPriorityPieChart.
-const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -182,7 +180,7 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
           <option value={ALL}>All priorities</option>
           {priorityOptions.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {priorityDisplay(p)}
             </option>
           ))}
         </select>

@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatNumber } from "../format";
+import { PRIORITY_ORDER, priorityDisplay } from "../priority";
 
 type Entry = { customer_name: string } & Record<string, unknown>;
 
@@ -46,6 +47,22 @@ function total(counts: Record<string, number>): number {
   return Object.values(counts).reduce((a, b) => a + b, 0);
 }
 
+// Priority drilldowns get the fixed Urgent->Low severity order + P-label;
+// every other drilldown type (e.g. stage) keeps the default count-desc sort.
+function sortDrilldownEntries(
+  drilldownKey: string | undefined,
+  drilldown: Record<string, number>
+): [string, number][] {
+  if (drilldownKey === "priority_counts") {
+    return PRIORITY_ORDER.filter((p) => p in drilldown).map((p) => [p, drilldown[p]]);
+  }
+  return Object.entries(drilldown).sort((a, b) => b[1] - a[1]);
+}
+
+function drilldownEntryLabel(drilldownKey: string | undefined, name: string): string {
+  return drilldownKey === "priority_counts" ? priorityDisplay(name) : name;
+}
+
 function BreakdownTooltip({ active, payload, allKeys, colorFor, byName, countsKey, drilldownKey, drilldownLabel }: any) {
   if (!active || !payload?.length) return null;
   const name = payload[0]?.payload?.customer_name;
@@ -54,9 +71,7 @@ function BreakdownTooltip({ active, payload, allKeys, colorFor, byName, countsKe
   const rowCounts = counts(entry, countsKey);
   const rowTotal = total(rowCounts);
   const drilldown = drilldownKey ? counts(entry, drilldownKey) : null;
-  const topDrilldown = drilldown
-    ? Object.entries(drilldown).sort((a, b) => b[1] - a[1])[0]
-    : null;
+  const topDrilldown = drilldown ? sortDrilldownEntries(drilldownKey, drilldown)[0] : null;
   return (
     <div className="chart-tooltip">
       <div className="tt-title">{name}</div>
@@ -73,7 +88,7 @@ function BreakdownTooltip({ active, payload, allKeys, colorFor, byName, countsKe
       </div>
       {topDrilldown && (
         <div className="tt-row" style={{ color: "var(--ink-3)", marginTop: 2 }}>
-          Top {drilldownLabel?.toLowerCase()}: {topDrilldown[0]} ({topDrilldown[1]})
+          Top {drilldownLabel?.toLowerCase()}: {drilldownEntryLabel(drilldownKey, topDrilldown[0])} ({topDrilldown[1]})
         </div>
       )}
     </div>
@@ -170,9 +185,8 @@ export function StackedBreakdownCard({
                         <td colSpan={allKeys.length + 2} style={{ background: "var(--surface-2)" }}>
                           <span className="card-sub">
                             By {drilldownLabel}:{" "}
-                            {Object.entries(drilldown)
-                              .sort((a, b) => b[1] - a[1])
-                              .map(([k, count]) => `${k} (${formatNumber(count)})`)
+                            {sortDrilldownEntries(drilldownKey, drilldown)
+                              .map(([k, count]) => `${drilldownEntryLabel(drilldownKey, k)} (${formatNumber(count)})`)
                               .join(", ")}
                           </span>
                         </td>

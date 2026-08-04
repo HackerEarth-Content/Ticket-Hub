@@ -3,6 +3,7 @@ import type { SlackIssue, SlackIssues } from "../types";
 import { BarList } from "./BarList";
 import { IssueTable } from "./ContentOnCallTable";
 import { SlackPriorityPieChart } from "./SlackPriorityPieChart";
+import { PRIORITY_ORDER, priorityDisplay } from "../priority";
 
 interface Props {
   data: SlackIssues | null;
@@ -10,18 +11,9 @@ interface Props {
 }
 
 // Same severity order/ramp as SlackPriorityPieChart -- kept in sync here so
-// the BarList rows and the pie slices agree on color.
-const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-const ORDINAL_RAMP = ["var(--ord-1)", "var(--ord-2)", "var(--ord-4)", "var(--ord-5)"];
-
-// Support's P-level equivalent for each derived priority, shown alongside
-// the bucket name since that's the scale the team actually pages on.
-const P_LABEL: Record<string, string> = {
-  LOW: "P3/P4",
-  MEDIUM: "P2",
-  HIGH: "P1",
-  URGENT: "P0",
-};
+// the BarList rows and the pie slices agree on color. Ramp is ordered to
+// match PRIORITY_ORDER (URGENT first), most-intense hue first.
+const ORDINAL_RAMP = ["var(--ord-5)", "var(--ord-4)", "var(--ord-2)", "var(--ord-1)"];
 
 /** A ticket's derived_priority is always one of PRIORITY_ORDER (see
  * hubspot_pipeline/priority.py) -- "Other" only exists as a defensive
@@ -58,7 +50,7 @@ export function SlackPriorityCard({ data, loading }: Props) {
   const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
   const items = PRIORITY_ORDER.filter((p) => counts[p]).map((p, i) => ({
     label: p,
-    displayLabel: P_LABEL[p] ? `${p} (${P_LABEL[p]})` : p,
+    displayLabel: priorityDisplay(p),
     value: counts[p],
     color: ORDINAL_RAMP[i],
   }));
@@ -131,7 +123,7 @@ export function SlackPriorityCard({ data, loading }: Props) {
             <div className="chart-drilldown">
               <div className="chart-drilldown-head">
                 <div className="card-sub">
-                  {P_LABEL[expanded] ? `${expanded} (${P_LABEL[expanded]})` : expanded} &middot;{" "}
+                  {priorityDisplay(expanded)} &middot;{" "}
                   {drilldownIssues.length} issue
                   {drilldownIssues.length === 1 ? "" : "s"}
                 </div>

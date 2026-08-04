@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from "recharts";
+import { PRIORITY_ORDER, priorityDisplay } from "../priority";
 
 interface Props {
   data: Record<string, number>;
@@ -11,19 +12,9 @@ interface Props {
 // Severity order/ramp -- same convention as ResolutionByPriorityCard and
 // StatusDistributionCard: priority is ordinal, not categorical, so it gets
 // a single-hue ramp instead of the categorical palette SlackReporterPieChart
-// uses for reporters.
-const PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-const ORDINAL_RAMP = ["var(--ord-1)", "var(--ord-2)", "var(--ord-4)", "var(--ord-5)"];
-
-// Support's P-level equivalent for each derived priority -- same mapping as
-// SlackPriorityCard's BarList, kept in sync so the bar rows and pie slices
-// show the same label.
-const P_LABEL: Record<string, string> = {
-  LOW: "P3/P4",
-  MEDIUM: "P2",
-  HIGH: "P1",
-  URGENT: "P0",
-};
+// uses for reporters. Ramp is ordered to match PRIORITY_ORDER (URGENT
+// first), most-intense hue first.
+const ORDINAL_RAMP = ["var(--ord-5)", "var(--ord-4)", "var(--ord-2)", "var(--ord-1)"];
 
 interface Slice {
   name: string;
@@ -35,7 +26,7 @@ interface Slice {
 function buildSlices(data: Record<string, number>): Slice[] {
   const known = PRIORITY_ORDER.filter((p) => data[p]).map((p, i) => ({
     name: p,
-    displayName: P_LABEL[p] ? `${p} (${P_LABEL[p]})` : p,
+    displayName: priorityDisplay(p),
     count: data[p],
     color: ORDINAL_RAMP[i],
   }));

@@ -13,6 +13,7 @@ import type {
   DataQuality,
   FrontlineFcr,
   FrontlineFrt,
+  FrontlineMetricDashboard,
   Granularity,
   LiveToday,
   ModuleDistribution,
@@ -100,6 +101,7 @@ export const api = {
   fcr: (period: Period) => get<FrontlineFcr>("/frontline/fcr", { period }),
   resolutionOwnership: (period: Period) =>
     get<ResolutionOwnership>("/frontline/resolution-ownership", { period }),
+  frontlineMetricDashboard: () => get<FrontlineMetricDashboard>("/frontline/metric-dashboard"),
   anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
   uncategorized: (period: Period) =>
     get<UncategorizedTickets>("/quality/uncategorized", { period }),

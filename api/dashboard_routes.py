@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
 from core.users import current_active_user, current_active_user_optional
-from dashboard import backline, customers, export, frontline, slack_issues, utils
+from dashboard import backline, customers, export, frontline, frontline_metric_dashboard, slack_issues, utils
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -177,6 +177,15 @@ async def frontline_resolution_ownership(
     period: str = PeriodParam, session: AsyncSession = Depends(get_session)
 ):
     return await frontline.get_frontline_resolution_ownership(session, period)
+
+
+@router.get("/frontline/metric-dashboard")
+async def frontline_metric_dashboard_route():
+    """Quarterly FRT/FCR/TTR/CSAT/NPS/ownership rollup -- always the current
+    rolling 4-quarter window, not period-scoped like the rest of this API.
+    Manages its own (many, concurrent) sessions rather than taking the usual
+    injected one -- see frontline_metric_dashboard.py for why."""
+    return await frontline_metric_dashboard.get_frontline_metric_dashboard()
 
 
 @router.get("/quality/anomalies")

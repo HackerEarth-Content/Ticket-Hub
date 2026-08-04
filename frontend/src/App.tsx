@@ -20,6 +20,7 @@ import { BacklineAePerformanceCard } from "./components/BacklineAePerformanceCar
 import { EscalationsTable } from "./components/EscalationsTable";
 import { StageTimingCard } from "./components/StageTimingCard";
 import { FrontlineQualityCard } from "./components/FrontlineQualityCard";
+import { FrontlineMetricDashboardCard } from "./components/FrontlineMetricDashboardCard";
 import { ResolutionOwnershipCard } from "./components/ResolutionOwnershipCard";
 import { AnomaliesCard } from "./components/AnomaliesCard";
 import { CustomerOverviewCard } from "./components/CustomerOverviewCard";
@@ -38,6 +39,7 @@ import { TabNav, type DashboardTab } from "./components/TabNav";
 import { api } from "./api";
 import { useAuth } from "./hooks/useAuth";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { useFrontlineMetricDashboard } from "./hooks/useFrontlineMetricDashboard";
 import { useLiveStatus } from "./hooks/useLiveStatus";
 import { useTheme } from "./hooks/useTheme";
 import type { Period } from "./types";
@@ -53,6 +55,15 @@ export default function App() {
   const { user, logout } = useAuth();
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
   const { live, sync, loading: liveLoading, syncing, syncError, syncNow } = useLiveStatus();
+  const { data: frontlineMetricDashboard, loading: frontlineMetricDashboardLoading } =
+    useFrontlineMetricDashboard(!!user, refreshTick);
+
+  // The tab is auth-gated (TabNav drops it from the nav for signed-out
+  // visitors) -- if a signed-in user is on it and then signs out, bounce
+  // back to overview instead of leaving them on a now-inaccessible tab.
+  useEffect(() => {
+    if (!user && tab === "frontline_metrics") setTab("overview");
+  }, [user, tab]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -145,7 +156,7 @@ export default function App() {
         <LiveStatusStrip live={live} loading={liveLoading} />
       </section>
 
-      <TabNav active={tab} onChange={setTab} />
+      <TabNav active={tab} onChange={setTab} isLoggedIn={!!user} />
 
       {tab === "overview" && (
         <>
@@ -330,6 +341,16 @@ export default function App() {
           <div style={{ marginTop: 14 }}>
             <ContentOnCallTable data={data?.slackIssues ?? null} loading={loading} />
           </div>
+        </>
+      )}
+
+      {tab === "frontline_metrics" && user && (
+        <>
+          <SectionHeading title="Frontline Metric Dashboard" color="var(--accent-aqua)" />
+          <FrontlineMetricDashboardCard
+            data={frontlineMetricDashboard}
+            loading={frontlineMetricDashboardLoading}
+          />
         </>
       )}
 
