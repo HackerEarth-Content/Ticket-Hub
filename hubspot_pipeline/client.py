@@ -57,6 +57,13 @@ TICKET_PROPERTIES = [
     "blackops_account_name",
     "other_blackops_account_name",
     "hs_primary_company_name",
+    # Event a ticket was raised for (hackathon/hiring challenge/etc) --
+    # verified against this portal's live property schema (2026-08-07):
+    # single-select radio with an "others" catch-all option, paired with the
+    # free-text other_event_name for that case. See models.py's
+    # _resolve_event_name for how the two collapse into one clean value.
+    "event_name",
+    "other_event_name",
     # HubSpot's own "module" dropdown (Assessment/Upskilling/Spam/etc, see
     # category_taxonomy.json's module comment for why this is a SEPARATE
     # concept from this pipeline's derived `module`) -- needed to match the

@@ -136,6 +136,7 @@ export const api = {
     get<CustomerStatusBreakdown>("/customers/status", { period }),
   customerDetails: (period: Period) => get<CustomerDetails>("/customers/details", { period }),
   customerNames: () => get<{ customer_names: string[] }>("/customers/names"),
+  eventNames: () => get<{ event_names: string[] }>("/events/names"),
   syncStatus: () => get<SyncStatus>("/meta/sync-status"),
   syncNow: () => post<SyncNowResult>("/meta/sync-now"),
   pipelines: () => get<Pipelines>("/meta/pipelines"),
@@ -178,6 +179,27 @@ export const api = {
     const res = await fetch(`${BASE}/export?period=${encodeURIComponent(period)}`);
     if (!res.ok) {
       throw new ApiError(`GET /export failed: ${res.status} ${res.statusText}`, res.status);
+    }
+    return res.blob();
+  },
+  exportEventTickets: async (eventName: string): Promise<Blob> => {
+    const url = `${BASE}/events/export/tickets?event_name=${encodeURIComponent(eventName)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new ApiError(
+        `GET /events/export/tickets failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
+    }
+    return res.blob();
+  },
+  exportFrontlineMetricDashboard: async (): Promise<Blob> => {
+    const res = await fetch(`${BASE}/frontline/metric-dashboard/export`);
+    if (!res.ok) {
+      throw new ApiError(
+        `GET /frontline/metric-dashboard/export failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
     }
     return res.blob();
   },

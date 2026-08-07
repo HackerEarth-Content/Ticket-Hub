@@ -29,6 +29,7 @@ import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
 import { CustomerExportControl } from "./components/CustomerExportControl";
+import { EventExportControl } from "./components/EventExportControl";
 import { FrontlineLinksCard } from "./components/FrontlineLinksCard";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
 import { BarListCard } from "./components/BarListCard";
@@ -52,6 +53,7 @@ export default function App() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportingNps, setExportingNps] = useState(false);
+  const [exportingFrontlineMetricDashboard, setExportingFrontlineMetricDashboard] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const { user, logout } = useAuth();
   const { loading, error, data, granularity } = useDashboardData(period, !!user, refreshTick);
@@ -119,6 +121,21 @@ export default function App() {
       URL.revokeObjectURL(url);
     } finally {
       setExportingNps(false);
+    }
+  }
+
+  async function handleExportFrontlineMetricDashboard() {
+    setExportingFrontlineMetricDashboard(true);
+    try {
+      const blob = await api.exportFrontlineMetricDashboard();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "frontline-metric-dashboard.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingFrontlineMetricDashboard(false);
     }
   }
 
@@ -268,7 +285,12 @@ export default function App() {
           <SectionHeading
             title="Customers"
             color="var(--accent-indigo)"
-            action={<CustomerExportControl period={period} />}
+            action={
+              <div style={{ display: "flex", gap: 8 }}>
+                <EventExportControl />
+                <CustomerExportControl period={period} />
+              </div>
+            }
           />
           <CustomerOverviewCard data={data?.customerVolume ?? null} loading={loading} />
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
@@ -347,7 +369,19 @@ export default function App() {
 
       {tab === "frontline_metrics" && user && (
         <>
-          <SectionHeading title="Frontline Metric Dashboard" color="var(--accent-aqua)" />
+          <SectionHeading
+            title="Frontline Metric Dashboard"
+            color="var(--accent-aqua)"
+            action={
+              <button
+                className="section-action"
+                onClick={handleExportFrontlineMetricDashboard}
+                disabled={exportingFrontlineMetricDashboard}
+              >
+                {exportingFrontlineMetricDashboard ? "⏳ Exporting…" : "⬇️ Download Excel"}
+              </button>
+            }
+          />
           <div style={{ marginBottom: 14 }}>
             <FrontlineLinksCard />
           </div>

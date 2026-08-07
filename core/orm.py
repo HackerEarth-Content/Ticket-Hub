@@ -58,6 +58,8 @@ class Ticket(Base):
     hubspot_module: Mapped[str | None]
     sub_category: Mapped[str | None]
     customer_name: Mapped[str | None] = mapped_column(index=True)
+    event_name: Mapped[str | None] = mapped_column(index=True)
+    other_event_name: Mapped[str | None]
 
     priority: Mapped[str | None]
     derived_priority: Mapped[str]

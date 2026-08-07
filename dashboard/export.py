@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import NpsResponse, Ticket
-from dashboard import backline, customers, frontline, utils
+from dashboard import backline, customers, frontline, frontline_metric_dashboard, utils
 from dashboard.customer_matching import match_names
 
 # Mirrors frontend/src/format.ts's hubspotTicketUrl -- same portal, same
@@ -383,6 +383,54 @@ async def build_customer_ticket_detail_workbook(
     return buffer.getvalue()
 
 
+_EVENT_TICKET_DETAIL_COLUMNS = [
+    ("event_name", "Event Name"),
+    # Populated for "others"-bucketed tickets (see hubspot_pipeline.models),
+    # blank for tickets with a real event_name -- so the "Others" download
+    # is where this column actually tells you what the ticket was really for.
+    ("other_event_name", "Other Event Name"),
+] + _CUSTOMER_TICKET_DETAIL_COLUMNS
+
+
+async def build_event_ticket_detail_workbook(session: AsyncSession, event_name: str) -> bytes:
+    """One sheet: every ticket ever raised for a single event, ticket-level
+    (not aggregated). All-time, not period-scoped -- an event runs on its own
+    fixed dates, not a recurring monthly window, so "download the report for
+    this event" means everything tagged with it, whenever it happened."""
+    columns = ["ticket_id"] + [attr for attr, _ in _EVENT_TICKET_DETAIL_COLUMNS]
+    rows = await session.execute(
+        select(*[getattr(Ticket, c) for c in columns])
+        .where(Ticket.event_name == event_name)
+        .order_by(Ticket.created_at.desc())
+    )
+    tickets = rows.all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = _safe_sheet_title(event_name)
+
+    headers = ["HubSpot Ticket ID"] + [label for _, label in _EVENT_TICKET_DETAIL_COLUMNS]
+    heading = f"{event_name} -- {len(tickets)} ticket(s), all-time"
+    ws.append([heading])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws.append(headers)
+
+    if not tickets:
+        ws.append(["No tickets found for this event"])
+    for row in tickets:
+        ticket_id = row[0]
+        ws.append([ticket_id] + [_cell_value(v) for v in row[1:]])
+        id_cell = ws.cell(row=ws.max_row, column=1)
+        id_cell.hyperlink = _hubspot_ticket_url(ticket_id)
+        id_cell.style = "Hyperlink"
+
+    _autosize(ws)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 async def build_customer_counts_workbook(session: AsyncSession, period: str) -> bytes:
     """Single-sheet workbook: issues reported per customer for the period --
     the same aggregate /customers/volume shows, but the full list instead of
@@ -409,6 +457,101 @@ async def build_customer_counts_workbook(session: AsyncSession, period: str) -> 
         ws.append([name, count])
     ws.append(["(No account)", no_account_count or 0])
     ws.append(["Total", sum(count for _, count in identified) + (no_account_count or 0)])
+    _autosize(ws)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+# Number formats append the unit as literal text (e.g. 83.5 -> "83.5h") so
+# the cell stays a real, sortable/summable number in Excel instead of a
+# formatted string -- same values the on-screen card shows, just not
+# hardcoded into the text.
+_FRONTLINE_METRIC_NUMBER_FORMATS = {
+    "percent": '0.0"%"',
+    "hours": '0.0"h"',
+    "days": '0.00"d"',
+    "score": "0.00",
+    "number": "#,##0",
+}
+
+_FRONTLINE_GROUP_FILL = PatternFill("solid", fgColor="1F3864")
+_FRONTLINE_GROUP_FONT = Font(bold=True, color="FFFFFF")
+
+
+async def build_frontline_metric_dashboard_workbook() -> bytes:
+    """Single-sheet mirror of the Frontline Metric Dashboard card -- every
+    group's every metric, every quarter/month/achieved column, laid out
+    exactly like the on-screen table (and the reference Excel it mirrors):
+    one row per metric, one column per time period, section headers
+    bifurcating the groups instead of splitting them across separate sheets."""
+    data = await frontline_metric_dashboard.get_frontline_metric_dashboard()
+    quarters = data["quarters"]
+    groups = data["groups"]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Frontline Metric Dashboard"
+
+    ws.append(["Frontline Metric Dashboard"])
+    ws.cell(row=1, column=1).font = Font(bold=True, size=14)
+    ws.append([])
+
+    # Row 3: quarter labels, each spanning its 4 columns (3 months + Achieved).
+    quarter_header_row = ["", ""]
+    for q in quarters:
+        quarter_header_row += [q["label"], "", "", ""]
+    ws.append(quarter_header_row)
+    col = 3
+    for q in quarters:
+        ws.merge_cells(start_row=3, start_column=col, end_row=3, end_column=col + 3)
+        col += 4
+
+    # Row 4: Metric | Target | month1 | month2 | month3 | Achieved | ... per quarter.
+    sub_header_row = ["Metric", "Target"]
+    for q in quarters:
+        sub_header_row += [*q["month_labels"], "Achieved"]
+    ws.append(sub_header_row)
+    for cell in (*ws[3], *ws[4]):
+        cell.font = Font(bold=True)
+
+    notes_seen: dict[str, None] = {}
+    for group in groups:
+        ws.append([group["label"]])
+        ws.merge_cells(
+            start_row=ws.max_row, start_column=1, end_row=ws.max_row, end_column=len(sub_header_row)
+        )
+        for cell in ws[ws.max_row]:
+            cell.font = _FRONTLINE_GROUP_FONT
+            cell.fill = _FRONTLINE_GROUP_FILL
+
+        for metric in group["metrics"]:
+            label = metric["label"]
+            if metric.get("note"):
+                label += " *"
+                notes_seen[metric["note"]] = None
+            row_values = [label, metric["target"]]
+            for q in quarters:
+                for month in q["months"]:
+                    row_values.append(month.get(metric["key"]))
+                row_values.append(q["achieved"].get(metric["key"]))
+            ws.append(row_values)
+
+            number_format = _FRONTLINE_METRIC_NUMBER_FORMATS.get(metric["format"])
+            if number_format:
+                for c in range(3, len(row_values) + 1):
+                    ws.cell(row=ws.max_row, column=c).number_format = number_format
+
+    if notes_seen:
+        ws.append([])
+        for note in notes_seen:
+            ws.append([f"* {note}"])
+            ws.merge_cells(
+                start_row=ws.max_row, start_column=1, end_row=ws.max_row, end_column=len(sub_header_row)
+            )
+
+    ws.freeze_panes = "C5"
     _autosize(ws)
 
     buffer = io.BytesIO()

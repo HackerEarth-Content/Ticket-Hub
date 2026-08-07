@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
 from core.users import current_active_user, current_active_user_optional
-from dashboard import backline, customers, export, frontline, frontline_metric_dashboard, slack_issues, utils
+from dashboard import backline, customers, events, export, frontline, frontline_metric_dashboard, slack_issues, utils
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -230,6 +230,19 @@ async def delete_frontline_metric_dashboard_link(
     return {"ok": True}
 
 
+@router.get("/frontline/metric-dashboard/export")
+async def frontline_metric_dashboard_export():
+    """Single-sheet Excel of the whole card -- every group, every quarter,
+    same numbers as the on-screen table, not period-scoped (the card itself
+    isn't either)."""
+    content = await export.build_frontline_metric_dashboard_workbook()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="frontline-metric-dashboard.xlsx"'},
+    )
+
+
 @router.get("/quality/anomalies")
 async def quality_anomalies(
     period: str = PeriodParam,
@@ -258,6 +271,25 @@ async def customer_names(session: AsyncSession = Depends(get_session)):
     """Full distinct customer/account name list -- feeds the "tickets by
     customer" export's company picker, unlike /customers/volume's top-15."""
     return await customers.get_customer_names(session)
+
+
+@router.get("/events/names")
+async def event_names(session: AsyncSession = Depends(get_session)):
+    """Full distinct event name list -- feeds the event export's dropdown."""
+    return await events.get_event_names(session)
+
+
+@router.get("/events/export/tickets")
+async def events_export_tickets(event_name: str, session: AsyncSession = Depends(get_session)):
+    """Ticket-level Excel for one event, all-time (see build_event_ticket_detail_workbook)."""
+    content = await export.build_event_ticket_detail_workbook(session, event_name)
+    safe_name = "".join(c if c.isalnum() else "_" for c in event_name)
+    filename = f"event-tickets-{safe_name}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/customers/export/tickets")

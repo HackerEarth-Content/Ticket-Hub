@@ -129,6 +129,13 @@ class DashboardTicket(BaseModel):
     hubspot_module: str | None  # HubSpot's own "module" dropdown -- see client.py's comment
     sub_category: str | None
     customer_name: str | None
+    # event_name is a single-select dropdown with an "others" catch-all
+    # option -- left as the raw value here (including the literal "others"),
+    # so every ticket picking it groups into one dropdown entry instead of
+    # fragmenting across other_event_name's inconsistent free text. The real
+    # per-ticket text still lives in other_event_name, for the export report.
+    event_name: str | None
+    other_event_name: str | None
 
     priority: str | None          # real hs_ticket_priority, None if blank
     derived_priority: str
@@ -215,6 +222,8 @@ class DashboardTicket(BaseModel):
             hubspot_module=props.get("module") or None,
             sub_category=props.get("sub_category") or None,
             customer_name=_unescape(resolve_customer_name(props)),
+            event_name=props.get("event_name") or None,
+            other_event_name=_unescape(props.get("other_event_name")) or None,
             priority=raw_priority,
             derived_priority=derived,
             priority_inferred=inferred,
