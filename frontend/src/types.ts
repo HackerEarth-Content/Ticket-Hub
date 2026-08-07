@@ -369,6 +369,12 @@ export interface FrontlineMetricDashboard {
   groups: FrontlineMetricGroup[];
 }
 
+export interface DashboardLink {
+  id: number;
+  name: string;
+  url: string;
+}
+
 export interface SyncStatus {
   last_synced_at: string | null;
   total_ticket_count: number;

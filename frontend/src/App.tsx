@@ -29,6 +29,7 @@ import { CustomerStatusCard } from "./components/CustomerStatusCard";
 import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
 import { CustomerExportControl } from "./components/CustomerExportControl";
+import { FrontlineLinksCard } from "./components/FrontlineLinksCard";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
 import { BarListCard } from "./components/BarListCard";
 import { SlackOverviewCard } from "./components/SlackOverviewCard";
@@ -347,6 +348,9 @@ export default function App() {
       {tab === "frontline_metrics" && user && (
         <>
           <SectionHeading title="Frontline Metric Dashboard" color="var(--accent-aqua)" />
+          <div style={{ marginBottom: 14 }}>
+            <FrontlineLinksCard />
+          </div>
           <FrontlineMetricDashboardCard
             data={frontlineMetricDashboard}
             loading={frontlineMetricDashboardLoading}

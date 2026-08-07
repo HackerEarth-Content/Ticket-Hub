@@ -3,7 +3,7 @@ backline.py, and frontline.py."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, Query, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
@@ -186,6 +186,48 @@ async def frontline_metric_dashboard_route():
     Manages its own (many, concurrent) sessions rather than taking the usual
     injected one -- see frontline_metric_dashboard.py for why."""
     return await frontline_metric_dashboard.get_frontline_metric_dashboard()
+
+
+@router.get("/frontline/metric-dashboard/links")
+async def frontline_metric_dashboard_links(
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    return await frontline_metric_dashboard.list_dashboard_links(session)
+
+
+@router.post("/frontline/metric-dashboard/links")
+async def create_frontline_metric_dashboard_link(
+    name: str = Body(...),
+    url: str = Body(...),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    return await frontline_metric_dashboard.add_dashboard_link(session, name, url)
+
+
+@router.put("/frontline/metric-dashboard/links/{link_id}")
+async def update_frontline_metric_dashboard_link(
+    link_id: int,
+    name: str = Body(...),
+    url: str = Body(...),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    updated = await frontline_metric_dashboard.update_dashboard_link(session, link_id, name, url)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Link not found")
+    return updated
+
+
+@router.delete("/frontline/metric-dashboard/links/{link_id}")
+async def delete_frontline_metric_dashboard_link(
+    link_id: int,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    await frontline_metric_dashboard.delete_dashboard_link(session, link_id)
+    return {"ok": True}
 
 
 @router.get("/quality/anomalies")

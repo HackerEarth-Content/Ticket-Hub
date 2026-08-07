@@ -19,11 +19,12 @@ import calendar
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import db_manager
-from core.orm import CsatResponse, NpsResponse, Ticket
+from core.orm import CsatResponse, DashboardLink, NpsResponse, Ticket
 from dashboard import frontline, utils
 from dashboard.utils import _normalized_csat_percentage, _percentage, _resolution_time_hours_expr, resolve_period
 from hubspot_pipeline.resolution_map import UNRESOLVED_BUCKET
@@ -155,20 +156,20 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     created_total = await session.scalar(
         select(func.count()).where(Ticket.created_at.between(period_start, period_end))
     )
-    # Automation, Passed-On (Passed to AM / Passed to Other Team), and
-    # CRM-UI-created tickets count as on-time, never overdue, per 2026-08-04
-    # request -- automation often closes tickets in a batch sweep well after
-    # they were created, a passed-on ticket is no longer frontline's SLA to
-    # answer for, and a ticket manually logged via the CRM UI (as opposed to
-    # a real inbound channel) doesn't have a genuine "customer waiting"
-    # clock either. None of the three should be judged against the close SLA
-    # clock. They still count in the total below (counted as on-time, not
-    # excluded).
+    # Only Support's own direct resolutions ("Issue Resolved") can ever be
+    # overdue, per 2026-08-04 request -- everything else is either handed off
+    # to another team (Engineering/Backline Engineering/Programs/Content/
+    # Marketing, same "no longer frontline's SLA to answer for" logic as
+    # Passed On), never really actionable (Non-Actionable: No Response/No
+    # Action Taken), or otherwise exempt (Automation's batch-close timing,
+    # CRM-UI-created tickets with no genuine "customer waiting" clock).
+    # All of those still count as on-time, not excluded -- they stay in the
+    # total below, they just can never land in the overdue bucket.
     overdue_count = await session.scalar(
         select(func.count()).where(
             Ticket.created_at.between(period_start, period_end),
             Ticket.sla_close_status == "Completed late",
-            Ticket.resolution_bucket.notin_(["Automation", "Passed On"]),
+            Ticket.resolution_bucket == "Support",
             Ticket.record_source.is_distinct_from("CRM_UI"),
         )
     )
@@ -240,8 +241,9 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
 
 
 _OVERDUE_NOTE = (
-    "Automation, Passed On (Passed to AM / Passed to Other Team), and "
-    "CRM-UI-created tickets always count as on-time, never overdue."
+    "Only Support's own direct resolutions can be overdue. Handed off to "
+    "another team, Automation, Non-Actionable (No Response/No Action "
+    "Taken), and CRM-UI-created tickets always count as on-time."
 )
 
 # Static schema for the card: group/metric labels, display format, and the
@@ -378,3 +380,33 @@ async def get_frontline_metric_dashboard() -> dict:
         )
 
     return {"quarters": result_quarters, "groups": METRIC_GROUPS}
+
+
+def _link_dict(link: DashboardLink) -> dict:
+    return {"id": link.id, "name": link.name, "url": link.url}
+
+
+async def list_dashboard_links(session: AsyncSession) -> list[dict]:
+    rows = await session.scalars(select(DashboardLink).order_by(DashboardLink.id))
+    return [_link_dict(row) for row in rows]
+
+
+async def add_dashboard_link(session: AsyncSession, name: str, url: str) -> dict:
+    link = DashboardLink(name=name, url=url)
+    session.add(link)
+    await session.commit()
+    return _link_dict(link)
+
+
+async def update_dashboard_link(session: AsyncSession, link_id: int, name: str, url: str) -> dict | None:
+    link = await session.get(DashboardLink, link_id)
+    if link is None:
+        return None
+    link.name, link.url = name, url
+    await session.commit()
+    return _link_dict(link)
+
+
+async def delete_dashboard_link(session: AsyncSession, link_id: int) -> None:
+    await session.execute(sa_delete(DashboardLink).where(DashboardLink.id == link_id))
+    await session.commit()

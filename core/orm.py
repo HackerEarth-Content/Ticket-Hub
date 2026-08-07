@@ -148,6 +148,19 @@ class SyncCursor(Base):
     last_synced_at: Mapped[datetime]
 
 
+class DashboardLink(Base):
+    """A user-added name+URL shortcut shown on a dashboard card (currently
+    just the Frontline Metric Dashboard's "Links" button) -- editable and
+    deletable in place."""
+
+    __tablename__ = "dashboard_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str]
+    url: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
+
+
 class OAuthAccount(SQLAlchemyBaseOAuthAccountTable[str], Base):
     id: Mapped[str] = mapped_column(
         Text,

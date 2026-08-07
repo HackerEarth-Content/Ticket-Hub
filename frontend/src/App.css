@@ -377,6 +377,54 @@ h1 {
   text-decoration: underline;
 }
 
+/* ---- quick links card ---- */
+.fl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.fl-row:last-child {
+  border-bottom: none;
+}
+.fl-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fl-link:hover {
+  color: var(--accent-blue);
+  text-decoration: underline;
+}
+.fl-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.fl-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.fl-form .select {
+  flex: 1 1 200px;
+}
+
 /* ---- live "today" panel ---- */
 .live-panel {
   background: color-mix(in srgb, var(--accent-aqua) 6%, var(--surface));

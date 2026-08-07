@@ -9,6 +9,7 @@ import type {
   CustomerDetails,
   CustomerStatusBreakdown,
   CustomerVolume,
+  DashboardLink,
   DataAnomalies,
   DataQuality,
   FrontlineFcr,
@@ -62,6 +63,25 @@ async function post<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function sendJson<T>(method: "POST" | "PUT", path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new ApiError(`${method} ${path} failed: ${res.status} ${res.statusText}`, res.status);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function del(path: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
+  if (!res.ok) {
+    throw new ApiError(`DELETE ${path} failed: ${res.status} ${res.statusText}`, res.status);
+  }
+}
+
 export const api = {
   liveToday: () => get<LiveToday>("/live/today"),
   summary: (period: Period) => get<Summary>("/summary", { period }),
@@ -102,6 +122,12 @@ export const api = {
   resolutionOwnership: (period: Period) =>
     get<ResolutionOwnership>("/frontline/resolution-ownership", { period }),
   frontlineMetricDashboard: () => get<FrontlineMetricDashboard>("/frontline/metric-dashboard"),
+  dashboardLinks: () => get<DashboardLink[]>("/frontline/metric-dashboard/links"),
+  addDashboardLink: (name: string, url: string) =>
+    sendJson<DashboardLink>("POST", "/frontline/metric-dashboard/links", { name, url }),
+  updateDashboardLink: (id: number, name: string, url: string) =>
+    sendJson<DashboardLink>("PUT", `/frontline/metric-dashboard/links/${id}`, { name, url }),
+  deleteDashboardLink: (id: number) => del(`/frontline/metric-dashboard/links/${id}`),
   anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
   uncategorized: (period: Period) =>
     get<UncategorizedTickets>("/quality/uncategorized", { period }),
