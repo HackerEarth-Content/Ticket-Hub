@@ -188,6 +188,17 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         select(func.count()).where(in_period, actionable_resolved, replied, ~on_time, ~_FRT_ALWAYS_ON_TIME)
     )
 
+    # HubSpot's own native SLA status, alongside this card's own custom
+    # thresholds above -- first response here (FRT group), resolution/close
+    # further down (TTR group), never mixed into the other's rows. on_time/
+    # breached share one denominator (tickets with a definitive verdict), so
+    # each pair always sums to 100%.
+    sla = await utils.get_sla_kpis(session, period)
+    first_response_sla_breakdown = sla["first_response_sla_status_breakdown"]
+    frt_sla_on_time_count = first_response_sla_breakdown.get("Completed on time", 0)
+    frt_sla_breached_count = first_response_sla_breakdown.get("Completed late", 0)
+    frt_sla_evaluated_count = frt_sla_on_time_count + frt_sla_breached_count
+
     # TTR/MTTR, scoped like every other metric on this card -- by the
     # ticket's created_at month, actionable tickets only -- instead of
     # utils.get_summary's closed_at/all-tickets scope (which pulls in
@@ -205,6 +216,11 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     ttr_within_3_days_count = await session.scalar(
         select(func.count()).where(actionable_resolved_created, _resolution_time_hours_expr() <= 72)
     )
+    resolution_sla_breakdown = sla["resolution_sla_status_breakdown"]
+    resolution_sla_on_time_count = resolution_sla_breakdown.get("Completed on time", 0)
+    resolution_sla_breached_count = resolution_sla_breakdown.get("Completed late", 0)
+    resolution_sla_evaluated_count = resolution_sla_on_time_count + resolution_sla_breached_count
+
     bucket_counts = ownership["ticket_count_by_resolution_bucket"]
     support_count = bucket_counts.get("Support", 0)
     automation_count = bucket_counts.get("Automation", 0)
@@ -213,8 +229,11 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "actionable_tickets": actionable_total or 0,
         "frt_on_time_count": frt_on_time_count,
         "frt_missed_count": frt_missed_count,
+        "frt_sla_breached_count": frt_sla_breached_count,
         "frt_on_time_percentage": _percentage(frt_on_time_count, actionable_total),
         "frt_missed_percentage": _percentage(frt_missed_count, actionable_total),
+        "frt_sla_on_time_percentage": _percentage(frt_sla_on_time_count, frt_sla_evaluated_count),
+        "frt_sla_breached_percentage": _percentage(frt_sla_breached_count, frt_sla_evaluated_count),
         "fcr_true_count": fcr["fcr_true_count"],
         "fcr_false_count": fcr["fcr_false_count"],
         "fcr_within_24h_count": fcr["fcr_resolved_within_24_hours_count"],
@@ -227,6 +246,13 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "median_resolution_hours": round(median_hours, 1) if median_hours is not None else None,
         "median_resolution_days": round(median_hours / 24, 2) if median_hours is not None else None,
         "resolved_within_3_days_percentage": _percentage(ttr_within_3_days_count, ttr_resolved_count),
+        "resolution_sla_breached_count": resolution_sla_breached_count,
+        "resolution_sla_on_time_percentage": _percentage(
+            resolution_sla_on_time_count, resolution_sla_evaluated_count
+        ),
+        "resolution_sla_breached_percentage": _percentage(
+            resolution_sla_breached_count, resolution_sla_evaluated_count
+        ),
         "resolved_by_support_count": support_count,
         "resolved_by_automation_count": automation_count,
         "resolved_by_engineering_count": bucket_counts.get("Engineering", 0),
@@ -268,6 +294,21 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     }
 
 
+_FRT_SLA_NOTE = (
+    "HubSpot's own first-response SLA status, across every ticket -- "
+    "unlike this group's FRT (30 min) on-time/missed rows above, which are "
+    "narrowed to actionable tickets with the Automation/Passed-On/CRM-UI "
+    "credit rule applied. On-time % and breached % share one denominator "
+    "(only tickets with a definitive verdict), so they always sum to 100%."
+)
+_RESOLUTION_SLA_NOTE = (
+    "HubSpot's own resolution/close SLA status, across every ticket -- "
+    "unlike this group's MTTR/median rows above, which are narrowed to "
+    "actionable tickets only. On-time % and breached % share one "
+    "denominator (only tickets with a definitive verdict), so they always "
+    "sum to 100%."
+)
+
 # Static schema for the card: group/metric labels, display format, and the
 # business-goal target for each row. Targets are config, not observed data --
 # same convention as utils._FRT_SLA_HOURS -- so they don't need a DB query.
@@ -279,8 +320,11 @@ METRIC_GROUPS: list[dict] = [
             {"key": "actionable_tickets", "label": "# of actionable tickets", "format": "number", "target": "-"},
             {"key": "frt_on_time_count", "label": "# of on-time FRT SLA (30 min) tickets", "format": "number", "target": "-"},
             {"key": "frt_missed_count", "label": "# of missed FRT SLA tickets", "format": "number", "target": "-"},
+            {"key": "frt_sla_breached_count", "label": "# of SLA breached tickets (first response, HubSpot native)", "format": "number", "target": "-", "note": _FRT_SLA_NOTE},
             {"key": "frt_on_time_percentage", "label": "% of on-time FRT SLA (30 min) tickets", "format": "percent", "target": ">=80%"},
             {"key": "frt_missed_percentage", "label": "% of missed FRT SLA tickets", "format": "percent", "target": "<=20%"},
+            {"key": "frt_sla_on_time_percentage", "label": "% SLA on-time (first response, HubSpot native)", "format": "percent", "target": "-", "note": _FRT_SLA_NOTE},
+            {"key": "frt_sla_breached_percentage", "label": "% SLA breached (first response, HubSpot native)", "format": "percent", "target": "<=20%", "note": _FRT_SLA_NOTE},
         ],
     },
     {
@@ -303,6 +347,9 @@ METRIC_GROUPS: list[dict] = [
             {"key": "median_resolution_hours", "label": "Median resolution (hrs)", "format": "hours", "target": "6 Hrs"},
             {"key": "median_resolution_days", "label": "Median resolution (days)", "format": "days", "target": "0.25 Days"},
             {"key": "resolved_within_3_days_percentage", "label": "% resolved within 3 days (SLA compliance)", "format": "percent", "target": ">=70%"},
+            {"key": "resolution_sla_breached_count", "label": "# of SLA breached tickets (resolution, HubSpot native)", "format": "number", "target": "-", "note": _RESOLUTION_SLA_NOTE},
+            {"key": "resolution_sla_on_time_percentage", "label": "% SLA on-time (resolution, HubSpot native)", "format": "percent", "target": "-", "note": _RESOLUTION_SLA_NOTE},
+            {"key": "resolution_sla_breached_percentage", "label": "% SLA breached (resolution, HubSpot native)", "format": "percent", "target": "<=20%", "note": _RESOLUTION_SLA_NOTE},
         ],
     },
     {
