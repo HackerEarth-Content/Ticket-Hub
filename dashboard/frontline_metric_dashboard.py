@@ -26,10 +26,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import db_manager
 from core.orm import CsatResponse, DashboardLink, NpsResponse, Ticket
 from dashboard import frontline, utils
-from dashboard.utils import _normalized_csat_percentage, _percentage, _resolution_time_hours_expr, resolve_period
-from hubspot_pipeline.resolution_map import UNRESOLVED_BUCKET
+from dashboard.utils import (
+    _actionable_and_resolved,
+    _FRT_SLA_HOURS,
+    _median_resolution_time_hours_expr,
+    _normalized_csat_percentage,
+    _percentage,
+    _resolution_time_hours_expr,
+    resolve_period,
+)
 
 _IST = ZoneInfo("Asia/Kolkata")
+
+# Resolution buckets/sources that the reference report always treats as
+# on-time for FRT, regardless of actual reply timing -- an automation sweep,
+# a hand-off to another team, or a ticket logged straight into the CRM never
+# had a real "customer waiting on a reply" clock running.
+_FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(("Automation", "Passed On")) | (
+    Ticket.record_source == "CRM_UI"
+)
 
 _QUARTER_START_MONTHS = (2, 5, 8, 11)
 _QUARTER_CODES = ("FMA", "MJJ", "ASO", "NDJ")
@@ -135,9 +150,7 @@ async def _ttr_block(session: AsyncSession, start: datetime, end: datetime, *fil
 async def _period_metrics(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
 
-    frt = await frontline.get_frontline_frt(session, period)
     fcr = await frontline.get_frontline_fcr(session, period)
-    summary = await utils.get_summary(session, period)
     ownership = await frontline.get_frontline_resolution_ownership(session, period)
     csat_raised = await utils.get_csat(session, period)
     csat_overall = await _get_csat_overall(session, period_start, period_end)
@@ -148,67 +161,82 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         session, period_start, period_end, Ticket.resolution_bucket == "Backline Engineering"
     )
 
+    in_period = Ticket.created_at.between(period_start, period_end)
+    actionable_resolved = _actionable_and_resolved()
+
     actionable_total = await session.scalar(
-        select(func.count()).where(
-            Ticket.created_at.between(period_start, period_end), Ticket.actionable.is_(True)
-        )
-    )
-    created_total = await session.scalar(
-        select(func.count()).where(Ticket.created_at.between(period_start, period_end))
-    )
-    # Only Support's own direct resolutions ("Issue Resolved") can ever be
-    # overdue, per 2026-08-04 request -- everything else is either handed off
-    # to another team (Engineering/Backline Engineering/Programs/Content/
-    # Marketing, same "no longer frontline's SLA to answer for" logic as
-    # Passed On), never really actionable (Non-Actionable: No Response/No
-    # Action Taken), or otherwise exempt (Automation's batch-close timing,
-    # CRM-UI-created tickets with no genuine "customer waiting" clock).
-    # All of those still count as on-time, not excluded -- they stay in the
-    # total below, they just can never land in the overdue bucket.
-    overdue_count = await session.scalar(
-        select(func.count()).where(
-            Ticket.created_at.between(period_start, period_end),
-            Ticket.sla_close_status == "Completed late",
-            Ticket.resolution_bucket == "Support",
-            Ticket.record_source.is_distinct_from("CRM_UI"),
-        )
+        select(func.count()).where(in_period, Ticket.actionable.is_(True))
     )
 
+    # FRT on-time/missed, per the reference report: Automation, Passed On
+    # (Passed to AM / Passed to Other Team), and CRM-UI-created tickets count
+    # as on-time unconditionally -- none of them had a real "customer
+    # waiting on a reply" clock running, regardless of what (if anything)
+    # time_to_first_agent_reply_hours recorded for them.
+    replied = Ticket.time_to_first_agent_reply_hours.isnot(None)
+    on_time = Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS
+    frt_credited_count = await session.scalar(
+        select(func.count()).where(in_period, actionable_resolved, _FRT_ALWAYS_ON_TIME)
+    )
+    frt_on_time_count = (
+        await session.scalar(
+            select(func.count()).where(in_period, actionable_resolved, replied, on_time, ~_FRT_ALWAYS_ON_TIME)
+        )
+        + frt_credited_count
+    )
+    frt_missed_count = await session.scalar(
+        select(func.count()).where(in_period, actionable_resolved, replied, ~on_time, ~_FRT_ALWAYS_ON_TIME)
+    )
+
+    # TTR/MTTR, scoped like every other metric on this card -- by the
+    # ticket's created_at month, actionable tickets only -- instead of
+    # utils.get_summary's closed_at/all-tickets scope (which pulls in
+    # Automation's near-instant auto-closes and drags outliers from
+    # Non-Actionable backlog, matching neither the mean nor the median the
+    # reference report shows).
+    actionable_resolved_created = actionable_resolved & in_period
+    ttr_resolved_count = await session.scalar(select(func.count()).where(actionable_resolved_created))
+    mttr_hours = await session.scalar(
+        select(func.avg(_resolution_time_hours_expr())).where(actionable_resolved_created)
+    )
+    median_hours = await session.scalar(
+        select(_median_resolution_time_hours_expr()).where(actionable_resolved_created)
+    )
+    ttr_within_3_days_count = await session.scalar(
+        select(func.count()).where(actionable_resolved_created, _resolution_time_hours_expr() <= 72)
+    )
     bucket_counts = ownership["ticket_count_by_resolution_bucket"]
-    resolved_total = sum(count for bucket, count in bucket_counts.items() if bucket != UNRESOLVED_BUCKET)
     support_count = bucket_counts.get("Support", 0)
     automation_count = bucket_counts.get("Automation", 0)
-    mttr_hours = summary["mean_resolution_time_hours"]
-    median_hours = summary["median_resolution_time_hours"]
 
     return {
         "actionable_tickets": actionable_total or 0,
-        "frt_on_time_count": frt["on_time_count"],
-        "frt_missed_count": frt["missed_count"],
-        "overdue_tickets": overdue_count or 0,
-        "frt_on_time_percentage": frt["on_time_percentage"],
-        "frt_missed_percentage": _percentage(frt["missed_count"], frt["on_time_count"] + frt["missed_count"]),
-        "overdue_percentage": _percentage(overdue_count, created_total),
+        "frt_on_time_count": frt_on_time_count,
+        "frt_missed_count": frt_missed_count,
+        "frt_on_time_percentage": _percentage(frt_on_time_count, actionable_total),
+        "frt_missed_percentage": _percentage(frt_missed_count, actionable_total),
         "fcr_true_count": fcr["fcr_true_count"],
         "fcr_false_count": fcr["fcr_false_count"],
         "fcr_within_24h_count": fcr["fcr_resolved_within_24_hours_count"],
         "fcr_percentage": fcr["first_contact_resolution_percentage"],
-        "fcr_within_24h_percentage": fcr["fcr_resolved_within_24_hours_percentage"],
-        "mttr_hours": mttr_hours,
+        "fcr_within_24h_percentage": _percentage(
+            fcr["fcr_resolved_within_24_hours_count"], fcr["fcr_true_count"] + fcr["fcr_false_count"]
+        ),
+        "mttr_hours": round(mttr_hours, 1) if mttr_hours is not None else None,
         "mttr_days": round(mttr_hours / 24, 2) if mttr_hours is not None else None,
-        "median_resolution_hours": median_hours,
+        "median_resolution_hours": round(median_hours, 1) if median_hours is not None else None,
         "median_resolution_days": round(median_hours / 24, 2) if median_hours is not None else None,
-        "resolved_within_3_days_percentage": summary["resolution_within_72_hours_percentage"],
+        "resolved_within_3_days_percentage": _percentage(ttr_within_3_days_count, ttr_resolved_count),
         "resolved_by_support_count": support_count,
         "resolved_by_automation_count": automation_count,
         "resolved_by_engineering_count": bucket_counts.get("Engineering", 0),
         "resolved_by_backline_count": bucket_counts.get("Backline Engineering", 0),
         "resolved_by_support_automation_percentage": _percentage(
-            support_count + automation_count, resolved_total
+            support_count + automation_count, actionable_total
         ),
-        "resolved_by_engineering_percentage": ownership["percentage_of_resolved_by_bucket"].get("Engineering"),
-        "resolved_by_backline_percentage": ownership["percentage_of_resolved_by_bucket"].get(
-            "Backline Engineering"
+        "resolved_by_engineering_percentage": _percentage(bucket_counts.get("Engineering", 0), actionable_total),
+        "resolved_by_backline_percentage": _percentage(
+            bucket_counts.get("Backline Engineering", 0), actionable_total
         ),
         "csat_overall_unhappy_count": csat_overall["response_count_by_rating"].get(0, 0),
         "csat_overall_neutral_count": csat_overall["response_count_by_rating"].get(1, 0),
@@ -240,12 +268,6 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     }
 
 
-_OVERDUE_NOTE = (
-    "Only Support's own direct resolutions can be overdue. Handed off to "
-    "another team, Automation, Non-Actionable (No Response/No Action "
-    "Taken), and CRM-UI-created tickets always count as on-time."
-)
-
 # Static schema for the card: group/metric labels, display format, and the
 # business-goal target for each row. Targets are config, not observed data --
 # same convention as utils._FRT_SLA_HOURS -- so they don't need a DB query.
@@ -257,10 +279,8 @@ METRIC_GROUPS: list[dict] = [
             {"key": "actionable_tickets", "label": "# of actionable tickets", "format": "number", "target": "-"},
             {"key": "frt_on_time_count", "label": "# of on-time FRT SLA (30 min) tickets", "format": "number", "target": "-"},
             {"key": "frt_missed_count", "label": "# of missed FRT SLA tickets", "format": "number", "target": "-"},
-            {"key": "overdue_tickets", "label": "# of overdue tickets", "format": "number", "target": "-", "note": _OVERDUE_NOTE},
             {"key": "frt_on_time_percentage", "label": "% of on-time FRT SLA (30 min) tickets", "format": "percent", "target": ">=80%"},
             {"key": "frt_missed_percentage", "label": "% of missed FRT SLA tickets", "format": "percent", "target": "<=20%"},
-            {"key": "overdue_percentage", "label": "% of overdue tickets", "format": "percent", "target": "<=1%", "note": _OVERDUE_NOTE},
         ],
     },
     {
