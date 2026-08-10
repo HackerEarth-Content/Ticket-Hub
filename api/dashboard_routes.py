@@ -279,6 +279,11 @@ async def event_names(session: AsyncSession = Depends(get_session)):
     return await events.get_event_names(session)
 
 
+@router.get("/events/volume")
+async def events_volume(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+    return await events.get_event_ticket_volume(session, period)
+
+
 @router.get("/events/export/tickets")
 async def events_export_tickets(event_name: str, session: AsyncSession = Depends(get_session)):
     """Ticket-level Excel for one event, all-time (see build_event_ticket_detail_workbook)."""

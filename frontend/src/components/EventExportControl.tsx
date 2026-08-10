@@ -10,16 +10,25 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+interface Props {
+  /** Restrict the picker to this list instead of loading every all-time
+   * event name -- e.g. the Programs/Events tab passes only the events with
+   * issues in the currently selected date range. */
+  eventNames?: string[];
+}
+
 /** Download control for "issue report for an event" -- same trigger/menu
  * pattern as CustomerExportControl, but single-mode: event_name is a
  * controlled HubSpot dropdown (see hubspot_pipeline.models._resolve_event_name),
  * not free text with aliasing problems, so no fuzzy-list mode is needed here. */
-export function EventExportControl() {
+export function EventExportControl({ eventNames: providedNames }: Props = {}) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [eventNames, setEventNames] = useState<string[]>([]);
+  const [fetchedNames, setFetchedNames] = useState<string[]>([]);
   const [loadingNames, setLoadingNames] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState("");
   const [exporting, setExporting] = useState(false);
+
+  const eventNames = providedNames ?? fetchedNames;
 
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -35,11 +44,11 @@ export function EventExportControl() {
 
   function toggleMenu() {
     setMenuOpen((o) => !o);
-    if (eventNames.length > 0) return;
+    if (providedNames || fetchedNames.length > 0) return;
     setLoadingNames(true);
     api
       .eventNames()
-      .then((r) => setEventNames(r.event_names))
+      .then((r) => setFetchedNames(r.event_names))
       .finally(() => setLoadingNames(false));
   }
 

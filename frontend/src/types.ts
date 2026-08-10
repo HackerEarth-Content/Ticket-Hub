@@ -422,6 +422,15 @@ export interface CustomerStatusBreakdown {
   all_customers: CustomerStatusEntry[];
 }
 
+export interface EventVolumeEntry {
+  event_name: string;
+  ticket_count: number;
+}
+
+export interface EventVolume {
+  events: EventVolumeEntry[];
+}
+
 export interface SourceDistribution {
   by_source: Record<string, number>;
   total_ticket_count: number;
@@ -475,4 +484,5 @@ export interface DashboardData {
   customerStatus: CustomerStatusBreakdown;
   customerDetails: CustomerDetails;
   sourceDistribution: SourceDistribution;
+  eventVolume: EventVolume;
 }

@@ -5,6 +5,7 @@ export type DashboardTab =
   | "frontline"
   | "backline"
   | "customers"
+  | "events"
   | "content_oncall"
   | "frontline_metrics";
 
@@ -13,6 +14,7 @@ const TABS: { key: DashboardTab; label: string; sub: string; accent: string; req
   { key: "frontline", label: "Frontline", sub: "L1", accent: "var(--accent-aqua)" },
   { key: "backline", label: "Backline", sub: "L2", accent: "var(--accent-orange)" },
   { key: "customers", label: "Customers", sub: "By account", accent: "var(--accent-indigo)" },
+  { key: "events", label: "Programs/Events", sub: "By event", accent: "var(--accent-yellow)" },
   { key: "content_oncall", label: "Slack Requests", sub: "Content/engg on-call", accent: "var(--accent-magenta)" },
   {
     key: "frontline_metrics",

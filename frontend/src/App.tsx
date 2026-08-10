@@ -30,6 +30,7 @@ import { CustomerResolverCard } from "./components/CustomerResolverCard";
 import { CustomerHealthTable } from "./components/CustomerHealthTable";
 import { CustomerExportControl } from "./components/CustomerExportControl";
 import { EventExportControl } from "./components/EventExportControl";
+import { EventsCard } from "./components/EventsCard";
 import { FrontlineLinksCard } from "./components/FrontlineLinksCard";
 import { ContentOnCallTable } from "./components/ContentOnCallTable";
 import { BarListCard } from "./components/BarListCard";
@@ -312,6 +313,17 @@ export default function App() {
               <CustomerHealthTable data={data?.customerDetails ?? null} loading={loading} />
             </div>
           )}
+        </>
+      )}
+
+      {tab === "events" && (
+        <>
+          <SectionHeading
+            title="Programs/Events"
+            color="var(--accent-yellow)"
+            action={<EventExportControl eventNames={data?.eventVolume?.events.map((e) => e.event_name) ?? []} />}
+          />
+          <EventsCard data={data?.eventVolume ?? null} loading={loading} />
         </>
       )}
 

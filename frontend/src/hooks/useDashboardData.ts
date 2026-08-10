@@ -60,6 +60,7 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
       api.customerDetails(period),
       api.slackIssues(period),
       api.slackWorkflowIssues(period),
+      api.eventVolume(period),
     ]);
 
     const privateData: Promise<
@@ -109,6 +110,7 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
             customerDetails,
             slackIssues,
             slackWorkflowIssues,
+            eventVolume,
           ],
           [agents, aePerformance, escalations, anomalies, uncategorized, moduleTickets, statusTickets],
         ]) => {
@@ -145,6 +147,7 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
               customerVolume,
               customerStatus,
               customerDetails,
+              eventVolume,
             },
           });
         }
