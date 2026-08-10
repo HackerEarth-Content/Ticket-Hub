@@ -24,7 +24,7 @@ from wootric_pipeline import pipeline as wootric_pipeline
 
 logger = structlog.get_logger(__name__)
 
-_INTERVAL_MINUTES = 5
+_INTERVAL_MINUTES = 10
 _JOB_ID = "incremental_sync"
 
 
