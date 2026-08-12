@@ -25,6 +25,7 @@ export interface Summary {
   median_resolution_time_hours: number | null;
   mean_resolution_time_hours: number | null;
   tickets_resolved_within_48_hours_count: number;
+  resolved_within_48_hours_percentage: number | null;
   resolution_within_72_hours_percentage: number | null;
   same_day_resolved_count: number;
   same_day_median_resolution_time_hours: number | null;

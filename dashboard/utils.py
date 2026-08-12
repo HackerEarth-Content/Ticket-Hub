@@ -232,6 +232,13 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
             Ticket.closed_at.between(period_start, period_end)
         )
     )
+    # closed_at-scoped, matching median/mean_resolution_time_hours above --
+    # deliberately NOT the same population as created_count/resolved_count
+    # (which are created_at-scoped), so this needs its own matching total to
+    # percentage against, not tickets_resolved_count.
+    closed_in_period_count = await session.scalar(
+        select(func.count()).where(Ticket.closed_at.between(period_start, period_end))
+    )
     resolved_within_48_hours_count = await session.scalar(
         select(func.count()).where(
             Ticket.closed_at.between(period_start, period_end),
@@ -280,6 +287,9 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
             round(mean_resolution_time_hours, 1) if mean_resolution_time_hours is not None else None
         ),
         "tickets_resolved_within_48_hours_count": resolved_within_48_hours_count or 0,
+        "resolved_within_48_hours_percentage": _percentage(
+            resolved_within_48_hours_count, closed_in_period_count
+        ),
         "resolution_within_72_hours_percentage": _percentage(
             actionable_resolved_within_72_hours_count, actionable_resolved_count
         ),

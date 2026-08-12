@@ -55,11 +55,8 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
               label="Resolved within 48h"
               value={formatNumber(summary.tickets_resolved_within_48_hours_count)}
               foot={
-                summary.tickets_resolved_count
-                  ? `${(
-                      (100 * summary.tickets_resolved_within_48_hours_count) /
-                      summary.tickets_resolved_count
-                    ).toFixed(0)}% of resolved`
+                summary.resolved_within_48_hours_percentage !== null
+                  ? `${formatPercent(summary.resolved_within_48_hours_percentage)} of tickets closed this period`
                   : undefined
               }
             />
