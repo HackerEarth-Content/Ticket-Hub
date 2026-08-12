@@ -36,6 +36,7 @@ import type {
   SyncNowResult,
   SyncStatus,
   UncategorizedTickets,
+  UnmatchedCsatResponses,
   VolumeTrendPoint,
 } from "./types";
 
@@ -132,6 +133,8 @@ export const api = {
   anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
   uncategorized: (period: Period) =>
     get<UncategorizedTickets>("/quality/uncategorized", { period }),
+  unmatchedCsat: (period: Period) =>
+    get<UnmatchedCsatResponses>("/quality/unmatched-csat", { period }),
   customerVolume: (period: Period) => get<CustomerVolume>("/customers/volume", { period }),
   customerStatus: (period: Period) =>
     get<CustomerStatusBreakdown>("/customers/status", { period }),

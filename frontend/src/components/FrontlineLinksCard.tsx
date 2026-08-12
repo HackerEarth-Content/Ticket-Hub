@@ -6,6 +6,8 @@ import type { DashboardLink } from "../types";
  * as any other frontline metric -- add/edit happens inline in the same card
  * instead of a popover, since the list is short and this is meant to be
  * glanced at, not dug for. */
+const _COLLAPSED_COUNT = 3;
+
 export function FrontlineLinksCard() {
   const [links, setLinks] = useState<DashboardLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,6 +15,7 @@ export function FrontlineLinksCard() {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   function refresh() {
     setLoading(true);
@@ -111,27 +114,38 @@ export function FrontlineLinksCard() {
       ) : links.length === 0 && editingId !== "new" ? (
         <div className="card-sub">No links yet - add one above.</div>
       ) : (
-        <div className="fl-list">
-          {links.map((link) =>
-            editingId === link.id ? (
-              <div key={link.id}>{form}</div>
-            ) : (
-              <div key={link.id} className="fl-row">
-                <a href={link.url} target="_blank" rel="noreferrer" className="fl-link">
-                  {link.name}
-                </a>
-                <span className="fl-actions">
-                  <button className="icon-btn" onClick={() => startEdit(link)} title="Edit" disabled={saving}>
-                    ✏️
-                  </button>
-                  <button className="icon-btn" onClick={() => remove(link.id)} title="Delete" disabled={saving}>
-                    🗑️
-                  </button>
-                </span>
-              </div>
-            ),
+        <>
+          <div className="fl-list" style={expanded ? { maxHeight: 360, overflowY: "auto" } : undefined}>
+            {(expanded ? links : links.slice(0, _COLLAPSED_COUNT)).map((link) =>
+              editingId === link.id ? (
+                <div key={link.id}>{form}</div>
+              ) : (
+                <div key={link.id} className="fl-row">
+                  <a href={link.url} target="_blank" rel="noreferrer" className="fl-link">
+                    {link.name}
+                  </a>
+                  <span className="fl-actions">
+                    <button className="icon-btn" onClick={() => startEdit(link)} title="Edit" disabled={saving}>
+                      ✏️
+                    </button>
+                    <button className="icon-btn" onClick={() => remove(link.id)} title="Delete" disabled={saving}>
+                      🗑️
+                    </button>
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+          {links.length > _COLLAPSED_COUNT && (
+            <button
+              className="table-toggle"
+              style={{ marginTop: 8 }}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Show less" : `Show more (${links.length - _COLLAPSED_COUNT})`}
+            </button>
           )}
-        </div>
+        </>
       )}
     </div>
   );

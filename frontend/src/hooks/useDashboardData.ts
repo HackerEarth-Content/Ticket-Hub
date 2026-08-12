@@ -70,6 +70,7 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
         DashboardData["escalations"],
         DashboardData["anomalies"],
         DashboardData["uncategorized"],
+        DashboardData["unmatchedCsat"],
         DashboardData["moduleTickets"],
         DashboardData["statusTickets"],
       ]
@@ -80,10 +81,11 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
           api.escalations(period),
           api.anomalies(period),
           api.uncategorized(period),
+          api.unmatchedCsat(period),
           api.moduleTickets(period),
           api.statusTickets(period),
-        ]).catch(() => [[], null, null, null, null, null, null])
-      : Promise.resolve([[], null, null, null, null, null, null]);
+        ]).catch(() => [[], null, null, null, null, null, null, null])
+      : Promise.resolve([[], null, null, null, null, null, null, null]);
 
     Promise.all([publicData, privateData])
       .then(
@@ -112,7 +114,16 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
             slackWorkflowIssues,
             eventVolume,
           ],
-          [agents, aePerformance, escalations, anomalies, uncategorized, moduleTickets, statusTickets],
+          [
+            agents,
+            aePerformance,
+            escalations,
+            anomalies,
+            uncategorized,
+            unmatchedCsat,
+            moduleTickets,
+            statusTickets,
+          ],
         ]) => {
           if (cancelled) return;
           setState({
@@ -140,6 +151,7 @@ export function useDashboardData(period: Period, isLoggedIn: boolean, refreshKey
               resolutionOwnership,
               anomalies,
               uncategorized,
+              unmatchedCsat,
               moduleTickets,
               statusTickets,
               slackIssues,

@@ -102,6 +102,15 @@ async def kpis_csat(period: str = PeriodParam, session: AsyncSession = Depends(g
     return await utils.get_csat(session, period)
 
 
+@router.get("/quality/unmatched-csat")
+async def quality_unmatched_csat(
+    period: str = PeriodParam,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    return await utils.get_unmatched_csat_responses(session, period)
+
+
 @router.get("/kpis/nps")
 async def kpis_nps(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
     return await utils.get_nps(session, period)

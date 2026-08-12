@@ -90,6 +90,19 @@ export interface Csat {
   rating_scale_confirmed: boolean;
 }
 
+export interface UnmatchedCsatResponse {
+  submission_id: string;
+  rating: number;
+  submitted_at: string;
+  contact_id: string | null;
+}
+
+export interface UnmatchedCsatResponses {
+  unmatched_count: number;
+  responses: UnmatchedCsatResponse[];
+  truncated: boolean;
+}
+
 export type NpsBucket = "promoter" | "passive" | "detractor";
 
 export interface NpsResponseDetail {
@@ -469,6 +482,7 @@ export interface DashboardData {
   escalations: BacklineEscalations | null;
   anomalies: DataAnomalies | null;
   uncategorized: UncategorizedTickets | null;
+  unmatchedCsat: UnmatchedCsatResponses | null;
   moduleTickets: ModuleTickets | null;
   statusTickets: StatusTickets | null;
   slackIssues: SlackIssues | null;

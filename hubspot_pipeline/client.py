@@ -299,6 +299,29 @@ class HubSpotClient:
             if r.get("to")
         }
 
+    async def fetch_ticket_pipelines(self, ticket_ids: list[str]) -> dict[str, str]:
+        """ticket_id -> current hs_pipeline, via a direct batch-read (not the
+        `_fetch_window` search) -- so it sees a ticket's real current pipeline
+        even if that ticket has since moved out of Support Pipeline and would
+        no longer match the search's `hs_pipeline EQ 0` filter. Tickets that
+        no longer exist in HubSpot at all (deleted) are simply absent from
+        the result. Used by pipeline.reconcile_pipeline_scope to catch drift
+        the regular sync can never see."""
+        if not ticket_ids:
+            return {}
+        url = f"{_BASE}/crm/v3/objects/tickets/batch/read"
+        results: dict[str, str] = {}
+        async with aiohttp.ClientSession() as session:
+            for i in range(0, len(ticket_ids), 100):
+                chunk = ticket_ids[i : i + 100]
+                body = {"inputs": [{"id": tid} for tid in chunk], "properties": ["hs_pipeline"]}
+                async with session.post(url, headers=_headers(), json=body) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                for r in data.get("results", []):
+                    results[r["id"]] = r.get("properties", {}).get("hs_pipeline")
+        return results
+
     async def fetch_contact_tickets(self, contact_ids: list[str]) -> dict[str, list[str]]:
         """contact_id -> [ticket_id, ...] -- candidates for matching a CSAT
         response back to the ticket it was likely about (see

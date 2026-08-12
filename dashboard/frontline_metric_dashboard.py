@@ -28,6 +28,7 @@ from core.orm import CsatResponse, DashboardLink, NpsResponse, Ticket
 from dashboard import frontline, utils
 from dashboard.utils import (
     _actionable_and_resolved,
+    _FRT_ALWAYS_ON_TIME,
     _FRT_SLA_HOURS,
     _median_resolution_time_hours_expr,
     _normalized_csat_percentage,
@@ -37,14 +38,6 @@ from dashboard.utils import (
 )
 
 _IST = ZoneInfo("Asia/Kolkata")
-
-# Resolution buckets/sources that the reference report always treats as
-# on-time for FRT, regardless of actual reply timing -- an automation sweep,
-# a hand-off to another team, or a ticket logged straight into the CRM never
-# had a real "customer waiting on a reply" clock running.
-_FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(("Automation", "Passed On")) | (
-    Ticket.record_source == "CRM_UI"
-)
 
 _QUARTER_START_MONTHS = (2, 5, 8, 11)
 _QUARTER_CODES = ("FMA", "MJJ", "ASO", "NDJ")
@@ -297,8 +290,8 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
 _FRT_SLA_NOTE = (
     "HubSpot's own first-response SLA status, across every ticket -- "
     "unlike this group's FRT (30 min) on-time/missed rows above, which are "
-    "narrowed to actionable tickets with the Automation/Passed-On/CRM-UI "
-    "credit rule applied. On-time % and breached % share one denominator "
+    "narrowed to actionable tickets with the Automation/Passed-On/CRM-UI/"
+    "Non-Actionable credit rule applied. On-time % and breached % share one denominator "
     "(only tickets with a definitive verdict), so they always sum to 100%."
 )
 _RESOLUTION_SLA_NOTE = (

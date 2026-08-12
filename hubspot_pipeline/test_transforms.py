@@ -26,6 +26,10 @@ def test_resolve_module():
     assert resolve_module(["Spam"]) == "Non-Actionable"
     assert resolve_module(["Some Unmapped Category"]) == "Other"
     assert resolve_module([]) == "Uncategorized"
+    # "Others"/"Other" are a real category, not non-actionable -- must not
+    # trip the module == "Non-Actionable" anomaly check.
+    assert resolve_module(["Others"]) == "Other"
+    assert resolve_module(["Other"]) == "Other"
 
 
 def test_resolve_status():

@@ -27,6 +27,11 @@ logger = structlog.get_logger(__name__)
 _INTERVAL_MINUTES = 10
 _JOB_ID = "incremental_sync"
 
+# Doesn't need incremental-sync freshness -- just needs to catch pipeline
+# drift (see pipeline.reconcile_pipeline_scope) before it's noticed.
+_RECONCILE_INTERVAL_MINUTES = 60
+_RECONCILE_JOB_ID = "pipeline_reconciliation"
+
 
 async def _sync_once() -> None:
     """Swallows and logs any exception -- APScheduler would otherwise just
@@ -45,6 +50,14 @@ async def _sync_once() -> None:
         logger.exception("incremental_sync_failed")
 
 
+async def _reconcile_once() -> None:
+    try:
+        stats = await pipeline.reconcile_pipeline_scope()
+        logger.info("pipeline_reconciliation_complete", **stats)
+    except Exception:
+        logger.exception("pipeline_reconciliation_failed")
+
+
 def start_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
@@ -54,6 +67,13 @@ def start_scheduler() -> AsyncIOScheduler:
         next_run_time=datetime.now(timezone.utc),  # run immediately on startup, not after the first interval
         max_instances=1,  # don't overlap if a sync ever runs long
         coalesce=True,  # if we fall behind, run once on catch-up, not once per missed interval
+    )
+    scheduler.add_job(
+        _reconcile_once,
+        IntervalTrigger(minutes=_RECONCILE_INTERVAL_MINUTES),
+        id=_RECONCILE_JOB_ID,
+        max_instances=1,
+        coalesce=True,
     )
     scheduler.start()
     return scheduler

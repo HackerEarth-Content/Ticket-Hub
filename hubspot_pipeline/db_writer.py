@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
 from core.database import db_manager
@@ -69,6 +69,32 @@ async def upsert_tickets(tickets: list[DashboardTicket]) -> None:
                 set_={c: getattr(stmt.excluded, c) for c in update_cols},
             )
             await session.execute(stmt)
+        await session.commit()
+
+
+async def fetch_non_terminal_ticket_ids() -> list[str]:
+    """Ticket IDs still in a non-final status -- the only ones that can have
+    silently drifted out of Support Pipeline scope since last synced (a
+    Resolved ticket won't have its status re-checked by the regular sync
+    either way, so there's nothing to reconcile there)."""
+    session_factory = db_manager.session_factory()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(Ticket.ticket_id).where(Ticket.canonical_status != "Resolved")
+        )
+        return [r[0] for r in rows.all()]
+
+
+async def delete_tickets(ticket_ids: list[str]) -> None:
+    """Remove tickets that reconcile_pipeline_scope found have moved out of
+    Support Pipeline (or been deleted in HubSpot) -- this dashboard is
+    Support-Pipeline-only by design, so a ticket that's left has nothing
+    meaningful to update to, it should just no longer appear here."""
+    if not ticket_ids:
+        return
+    session_factory = db_manager.session_factory()
+    async with session_factory() as session:
+        await session.execute(delete(Ticket).where(Ticket.ticket_id.in_(ticket_ids)))
         await session.commit()
 
 

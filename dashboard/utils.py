@@ -114,6 +114,20 @@ def _actionable_and_resolved():
     return Ticket.actionable.is_(True) & (Ticket.canonical_status == "Resolved")
 
 
+# Resolution buckets/sources that never had a real "customer waiting on a
+# reply/closure" clock running -- an automation sweep, a hand-off to another
+# team, a ticket logged straight into the CRM, or one closed as spam/non-issue/
+# no-response (no reply was ever warranted, so HubSpot's native SLA field
+# just sees "no reply logged" and marks it Overdue forever, even resolved).
+# Shared by every "Overdue" computation (SLA breakdowns here, the live
+# awaiting-reply tile in frontline.py, and the FRT credit in
+# frontline_metric_dashboard.py) so a fix to which categories are exempt only
+# needs to happen in one place.
+_FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(("Automation", "Passed On", "Non-Actionable")) | (
+    Ticket.record_source == "CRM_UI"
+)
+
+
 def _percentage(part: int | None, total: int | None) -> float | None:
     return round(100 * (part or 0) / total, 1) if total else None
 
@@ -196,8 +210,14 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
     created_count = await session.scalar(
         select(func.count()).where(Ticket.created_at.between(period_start, period_end))
     )
+    # Scoped by created_at (like created_count above), not closed_at -- a
+    # ticket created in this period but closed after it ends is still one of
+    # this period's resolved tickets, not a miss.
     resolved_count = await session.scalar(
-        select(func.count()).where(Ticket.closed_at.between(period_start, period_end))
+        select(func.count()).where(
+            Ticket.created_at.between(period_start, period_end),
+            Ticket.canonical_status == "Resolved",
+        )
     )
     median_resolution_time_hours = await session.scalar(
         select(_median_resolution_time_hours_expr()).where(
@@ -425,16 +445,22 @@ async def get_module_tickets(session: AsyncSession, period: str) -> dict:
 
 async def get_source_distribution(session: AsyncSession, period: str) -> dict:
     """Channel mix (source_type) across all tickets in the period -- e.g.
-    EMAIL vs CHAT vs Slack. General/org-wide, not scoped to any team or
-    customer."""
+    EMAIL vs CHAT vs Slack. Tickets logged straight into HubSpot have no
+    customer-facing channel to record as source_type, but do carry
+    record_source == "CRM_UI" -- bucketed as "Created directly" instead of
+    lumping them in with genuinely unclassified "Unknown" tickets.
+    General/org-wide, not scoped to any team or customer."""
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
-        select(Ticket.source_type, func.count())
+        select(Ticket.source_type, Ticket.record_source, func.count())
         .where(Ticket.created_at.between(period_start, period_end))
-        .group_by(Ticket.source_type)
-        .order_by(func.count().desc())
+        .group_by(Ticket.source_type, Ticket.record_source)
     )
-    by_source = {(source or "Unknown"): count for source, count in rows.all()}
+    by_source: dict[str, int] = {}
+    for source_type, record_source, count in rows.all():
+        label = source_type or ("Created directly" if record_source == "CRM_UI" else "Unknown")
+        by_source[label] = by_source.get(label, 0) + count
+    by_source = dict(sorted(by_source.items(), key=lambda kv: -kv[1]))
     return {"by_source": by_source, "total_ticket_count": sum(by_source.values())}
 
 
@@ -531,12 +557,17 @@ async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
         evaluated = breakdown.get("Completed on time", 0) + breakdown.get("Completed late", 0)
         return _percentage(breakdown.get("Completed late", 0), evaluated)
 
-    # Automation-closed tickets never get a human first reply, so HubSpot's
-    # own sla_first_response_status defaults them to "Overdue" -- a data
-    # artifact, not a real service failure. Excluded here only; the
-    # resolution/close SLA is still legitimate for these (they did close).
+    # Automation-closed, passed-on, CRM-UI-created, and non-actionable
+    # (spam/non-issue/no-response) tickets never had a real customer-waiting-
+    # for-a-reply clock running, so HubSpot's own sla_first_response_status
+    # defaults them to "Overdue" forever -- a data artifact, not a real
+    # service miss. Close/resolution SLA is a different question ("did it get
+    # closed in time") that's still legitimate for these -- they did close,
+    # verified against live data: this exemption removes zero Overdue rows
+    # from the close breakdown, only real on-time/late closures -- so it's
+    # applied to first-response only.
     first_response_status_breakdown = await _breakdown(
-        Ticket.sla_first_response_status, Ticket.resolution_bucket != "Automation"
+        Ticket.sla_first_response_status, ~_FRT_ALWAYS_ON_TIME
     )
     resolution_status_breakdown = await _breakdown(Ticket.sla_close_status)
 
@@ -607,6 +638,39 @@ async def get_csat(session: AsyncSession, period: str) -> dict:
         "normalized_csat_percentage": _normalized_csat_percentage(response_count_by_rating),
         "unmatched_to_ticket_count": unmatched_to_ticket_count or 0,
         "rating_scale_confirmed": True,
+    }
+
+
+async def get_unmatched_csat_responses(session: AsyncSession, period: str) -> dict:
+    """Drill-down list behind get_csat's `unmatched_to_ticket_count` -- CSAT
+    responses HubSpot never associated to a ticket (or whose contact had no
+    ticket to match against). No ticket_id to scope by created_at, so this is
+    scoped by submitted_at instead, same as the count it explains."""
+    period_start, period_end = resolve_period(period)
+    filters = (
+        CsatResponse.submitted_at.between(period_start, period_end),
+        CsatResponse.ticket_id.is_(None),
+    )
+    total = await session.scalar(select(func.count()).where(*filters))
+    rows = await session.execute(
+        select(CsatResponse.submission_id, CsatResponse.rating, CsatResponse.submitted_at, CsatResponse.contact_id)
+        .where(*filters)
+        .order_by(CsatResponse.submitted_at.desc())
+        .limit(_DRILLDOWN_LIMIT)
+    )
+    responses = [
+        {
+            "submission_id": r.submission_id,
+            "rating": r.rating,
+            "submitted_at": _utc_iso(r.submitted_at),
+            "contact_id": r.contact_id,
+        }
+        for r in rows.all()
+    ]
+    return {
+        "unmatched_count": total or 0,
+        "responses": responses,
+        "truncated": (total or 0) > _DRILLDOWN_LIMIT,
     }
 
 

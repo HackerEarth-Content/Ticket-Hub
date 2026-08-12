@@ -40,7 +40,6 @@ export function FrontlineQualityCard({ frt, fcr, loading }: Props) {
             <StatTile
               label="Awaiting response from user"
               value={formatNumber(frt.awaiting_reply_overdue_count)}
-              tone={frt.awaiting_reply_overdue_count > 0 ? "critical" : "default"}
             />
             <StatTile
               label="First contact resolution"

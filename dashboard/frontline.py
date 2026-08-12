@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.orm import Ticket
 from dashboard.utils import (
     _actionable_and_resolved,
+    _FRT_ALWAYS_ON_TIME,
     _FRT_SLA_HOURS,
     _percentage,
     _utc_iso,
@@ -55,6 +56,7 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         & Ticket.time_to_first_agent_reply_hours.is_(None)
         & Ticket.stage_label.in_(_AWAITING_REPLY_STAGES)
         & (func.extract("epoch", func.now() - Ticket.created_at) / 3600 > _FRT_SLA_HOURS)
+        & ~_FRT_ALWAYS_ON_TIME
     )
 
     async def _counts(*extra_filters):
@@ -186,7 +188,14 @@ _ANOMALY_DEFINITIONS: dict[str, tuple] = {
     ),
     "resolved_actionable_without_owner": (
         "Resolved, actionable ticket with no Ticket Owner",
-        (Ticket.canonical_status == "Resolved", Ticket.actionable.is_(True), Ticket.owner_id.is_(None)),
+        (
+            Ticket.canonical_status == "Resolved",
+            Ticket.actionable.is_(True),
+            Ticket.owner_id.is_(None),
+            # Automation-closed tickets are expected to have no human
+            # owner -- not a data anomaly.
+            Ticket.resolution_bucket != "Automation",
+        ),
     ),
 }
 # Duplicate-ticket-ID isn't checkable here: ticket_id is the table's primary

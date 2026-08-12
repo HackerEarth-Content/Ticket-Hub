@@ -842,6 +842,8 @@ h1 {
 /* ---- tables ---- */
 .tbl-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 360px;
 }
 table {
   width: 100%;
@@ -857,6 +859,9 @@ th {
   font-weight: 650;
   padding: 0 10px 8px;
   border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
 }
 td {
   padding: 9px 10px;

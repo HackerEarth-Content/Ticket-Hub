@@ -217,7 +217,11 @@ export default function App() {
 
           <SectionHeading title="Service Health" color="var(--accent-magenta)" />
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
-            <CsatCard csat={data?.csat ?? null} loading={loading} />
+            <CsatCard
+              csat={data?.csat ?? null}
+              unmatchedCsat={data?.unmatchedCsat ?? null}
+              loading={loading}
+            />
             <DataQualityCard
               dataQuality={data?.dataQuality ?? null}
               uncategorized={data?.uncategorized ?? null}
@@ -286,12 +290,7 @@ export default function App() {
           <SectionHeading
             title="Customers"
             color="var(--accent-indigo)"
-            action={
-              <div style={{ display: "flex", gap: 8 }}>
-                <EventExportControl />
-                <CustomerExportControl period={period} />
-              </div>
-            }
+            action={<CustomerExportControl period={period} />}
           />
           <CustomerOverviewCard data={data?.customerVolume ?? null} loading={loading} />
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
@@ -394,13 +393,13 @@ export default function App() {
               </button>
             }
           />
-          <div style={{ marginBottom: 14 }}>
-            <FrontlineLinksCard />
-          </div>
           <FrontlineMetricDashboardCard
             data={frontlineMetricDashboard}
             loading={frontlineMetricDashboardLoading}
           />
+          <div style={{ marginTop: 14 }}>
+            <FrontlineLinksCard />
+          </div>
         </>
       )}
 

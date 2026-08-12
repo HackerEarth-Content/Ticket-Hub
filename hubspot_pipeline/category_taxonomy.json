@@ -30,7 +30,7 @@
     ],
     "Non-Actionable": [
       "Not Actionable", "No Action Required", "Spam", "No Information Received",
-      "Others", "Other", "Bug Bounty", "Community", "Job Request", "Collaboration/Marketing"
+      "Bug Bounty", "Community", "Job Request", "Collaboration/Marketing"
     ]
   },
   "typo_map": {

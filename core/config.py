@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     HUBSPOT_SERVICE_KEY: str
 
     DATABASE_URL: str
+    DATABASE_URL_READONLY: str = ""
 
     OPENAI_API_KEY: str = ""
 

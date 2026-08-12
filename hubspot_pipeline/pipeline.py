@@ -14,7 +14,7 @@ from pathlib import Path
 
 from hubspot_pipeline import cursor as cursor_store
 from hubspot_pipeline import db_writer
-from hubspot_pipeline.client import HubSpotClient
+from hubspot_pipeline.client import HubSpotClient, _SUPPORT_PIPELINE_ID
 from hubspot_pipeline.db_writer import parse_iso, upsert_tickets
 from hubspot_pipeline.models import CsatSubmission, DashboardTicket
 
@@ -54,6 +54,27 @@ async def run_incremental() -> dict:
     await cursor_store.set_cursor(started_at)
 
     return summarize(tickets)
+
+
+async def reconcile_pipeline_scope() -> dict:
+    """Catches tickets that moved out of Support Pipeline (or were deleted)
+    in HubSpot after being synced -- the regular incremental/full sync can
+    never see this, since its search is itself filtered to
+    `hs_pipeline EQ 0` (see client.py), so a ticket that left never matches
+    that filter again and would otherwise stay frozen in our DB forever at
+    its last-known status. Scoped to non-terminal tickets only -- a small,
+    bounded set -- and done via a direct batch-read, which (unlike search)
+    isn't filtered by pipeline."""
+    ticket_ids = await db_writer.fetch_non_terminal_ticket_ids()
+    client = HubSpotClient()
+    current_pipelines = await client.fetch_ticket_pipelines(ticket_ids)
+
+    # .get(tid) is None (not `_SUPPORT_PIPELINE_ID`) for a ticket HubSpot no
+    # longer returns at all -- deleted tickets get cleaned up here too.
+    stale_ids = [tid for tid in ticket_ids if current_pipelines.get(tid) != _SUPPORT_PIPELINE_ID]
+    await db_writer.delete_tickets(stale_ids)
+
+    return {"checked": len(ticket_ids), "removed": len(stale_ids)}
 
 
 def _match_ticket(

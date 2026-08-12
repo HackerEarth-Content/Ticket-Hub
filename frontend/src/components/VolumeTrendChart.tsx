@@ -21,10 +21,7 @@ function formatTick(iso: string, granularity: Granularity): string {
   if (granularity === "hour") {
     return d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
   }
-  if (granularity === "week" || granularity === "month") {
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-  return d.toLocaleDateString("en-US", { weekday: "short" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function ChartTooltip({ active, payload, label, granularity }: any) {
