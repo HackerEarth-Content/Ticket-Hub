@@ -79,7 +79,11 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
     channel_counts: dict[str, int] = {}
     priority_by_team: dict[str, dict[str, int]] = {}
     priority_by_channel: dict[str, dict[str, int]] = {}
-    issues_by_category: dict[str, list[dict]] = {"content": [], "engg_oncall": [], "uncategorized": []}
+    issues_by_category: dict[str, list[dict]] = {
+        "content": [],
+        "engg_oncall": [],
+        "uncategorized": [],
+    }
     for (
         ticket_id,
         subject,
@@ -116,7 +120,9 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         # page below -- a chart summarizing "who reports issues" shouldn't
         # undercount past the drilldown cap. Same goes for the per-team/
         # per-channel priority counts feeding the priority chart's filters.
-        bucket = by_reporter.setdefault(reporter_name, {"reported_count": 0, "solved_count": 0})
+        bucket = by_reporter.setdefault(
+            reporter_name, {"reported_count": 0, "solved_count": 0}
+        )
         bucket["reported_count"] += 1
         if canonical_status == "Resolved":
             bucket["solved_count"] += 1
@@ -145,10 +151,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         "priority_by_team": priority_by_team,
         "priority_by_channel": priority_by_channel,
         "by_reporter": sorted(
-            (
-                {"reporter_name": name, **counts}
-                for name, counts in by_reporter.items()
-            ),
+            ({"reporter_name": name, **counts} for name, counts in by_reporter.items()),
             key=lambda r: r["reported_count"],
             reverse=True,
         ),
@@ -181,12 +184,19 @@ async def get_slack_workflow_breakdown(session: AsyncSession, period: str) -> di
     )
 
     by_reporter: dict[str, dict[str, dict]] = {"content": {}, "engg_oncall": {}}
-    for slack_workflow, reporter_contact_name, owner_name, canonical_status in rows.all():
+    for (
+        slack_workflow,
+        reporter_contact_name,
+        owner_name,
+        canonical_status,
+    ) in rows.all():
         bucket = _classify_workflow(slack_workflow)
         if bucket is None:
             continue
         reporter_name = reporter_contact_name or owner_name or "Unassigned"
-        counts = by_reporter[bucket].setdefault(reporter_name, {"reported_count": 0, "solved_count": 0})
+        counts = by_reporter[bucket].setdefault(
+            reporter_name, {"reported_count": 0, "solved_count": 0}
+        )
         counts["reported_count"] += 1
         if canonical_status == "Resolved":
             counts["solved_count"] += 1

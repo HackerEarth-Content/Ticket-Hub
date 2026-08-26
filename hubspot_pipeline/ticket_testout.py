@@ -17,9 +17,8 @@ Requires HUBSPOT_API_KEY in .env
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-from collections import Counter, defaultdict
+from collections import Counter
 
 import aiohttp
 from dotenv import load_dotenv
@@ -96,12 +95,16 @@ async def fetch_tickets_page(
     return tickets, next_after
 
 
-async def sample_tickets(session: aiohttp.ClientSession, limit: int = SAMPLE_LIMIT) -> list[dict]:
+async def sample_tickets(
+    session: aiohttp.ClientSession, limit: int = SAMPLE_LIMIT
+) -> list[dict]:
     tickets: list[dict] = []
     after = None
     while len(tickets) < limit:
         page_size = min(200, limit - len(tickets))
-        batch, after = await fetch_tickets_page(session, after=after, page_size=page_size)
+        batch, after = await fetch_tickets_page(
+            session, after=after, page_size=page_size
+        )
         tickets.extend(batch)
         if not after:
             break
@@ -192,12 +195,16 @@ async def main() -> None:
             for subj in support_subjects[:20]:
                 print(f"  • {subj}")
         else:
-            print("\n  (No Support Pipeline tickets found in sample — check pipeline label match)")
+            print(
+                "\n  (No Support Pipeline tickets found in sample — check pipeline label match)"
+            )
 
         # ── 4. Raw property keys for discovery ───────────────────────────────
         if tickets:
             _print_section("ALL PROPERTY KEYS SEEN ON TICKETS")
-            all_keys = sorted({k for t in tickets for k in t.get("properties", {}).keys()})
+            all_keys = sorted(
+                {k for t in tickets for k in t.get("properties", {}).keys()}
+            )
             for k in all_keys:
                 print(f"  {k}")
 

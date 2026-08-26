@@ -40,6 +40,7 @@ def _csat_native_module_allowed():
         Ticket.hubspot_module.notin_(_CSAT_EXCLUDED_NATIVE_MODULES),
     )
 
+
 _PERIODS = ("today", "yesterday", "week", "month")
 
 # The support team works in IST -- "today"/"yesterday" must split on IST
@@ -57,7 +58,11 @@ def _ist_today_start(now: datetime) -> datetime:
     UTC. Every "today" boundary in this module must go through this -- a
     plain UTC midnight is 5.5h off from the support team's actual day
     boundary, over- or under-counting whatever happened in that window."""
-    return now.astimezone(_IST).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    return (
+        now.astimezone(_IST)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .astimezone(timezone.utc)
+    )
 
 
 def resolve_period(period: str) -> tuple[datetime, datetime]:
@@ -71,18 +76,24 @@ def resolve_period(period: str) -> tuple[datetime, datetime]:
     if period.startswith("custom:"):
         parts = period.split(":")
         if len(parts) != 3:
-            raise ValueError(f"Invalid custom period {period!r}, expected custom:YYYY-MM-DD:YYYY-MM-DD")
+            raise ValueError(
+                f"Invalid custom period {period!r}, expected custom:YYYY-MM-DD:YYYY-MM-DD"
+            )
         try:
             start_date = datetime.strptime(parts[1], "%Y-%m-%d").replace(tzinfo=_IST)
             end_date = datetime.strptime(parts[2], "%Y-%m-%d").replace(tzinfo=_IST)
         except ValueError:
-            raise ValueError(f"Invalid custom period {period!r}, expected custom:YYYY-MM-DD:YYYY-MM-DD")
+            raise ValueError(
+                f"Invalid custom period {period!r}, expected custom:YYYY-MM-DD:YYYY-MM-DD"
+            )
         range_start = start_date.astimezone(timezone.utc)
         range_end = (end_date + timedelta(days=1)).astimezone(timezone.utc)
         return range_start, min(range_end, now)
 
     if period not in _PERIODS:
-        raise ValueError(f"Unknown period {period!r}, expected one of {_PERIODS} or custom:START:END")
+        raise ValueError(
+            f"Unknown period {period!r}, expected one of {_PERIODS} or custom:START:END"
+        )
 
     today_start = _ist_today_start(now)
     if period == "today":
@@ -123,9 +134,9 @@ def _actionable_and_resolved():
 # awaiting-reply tile in frontline.py, and the FRT credit in
 # frontline_metric_dashboard.py) so a fix to which categories are exempt only
 # needs to happen in one place.
-_FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(("Automation", "Passed On", "Non-Actionable")) | (
-    Ticket.record_source == "CRM_UI"
-)
+_FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(
+    ("Automation", "Passed On", "Non-Actionable")
+) | (Ticket.record_source == "CRM_UI")
 
 
 def _percentage(part: int | None, total: int | None) -> float | None:
@@ -195,7 +206,9 @@ async def get_live_today(session: AsyncSession) -> dict:
         "open_ticket_count_by_status": dict(status_rows.all()),
         "resolved_today_count": resolved_today or 0,
         "resolved_today_on_time_count": resolved_today_on_time or 0,
-        "resolved_today_on_time_percentage": _percentage(resolved_today_on_time, resolved_today),
+        "resolved_today_on_time_percentage": _percentage(
+            resolved_today_on_time, resolved_today
+        ),
         "first_response_on_time_today_count": first_response_on_time_today or 0,
         "first_response_on_time_today_percentage": _percentage(
             first_response_on_time_today, first_response_replied_today
@@ -254,7 +267,9 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
     same_day_resolved = Ticket.created_at.between(
         period_start, period_end
     ) & Ticket.closed_at.between(period_start, period_end)
-    same_day_resolved_count = await session.scalar(select(func.count()).where(same_day_resolved))
+    same_day_resolved_count = await session.scalar(
+        select(func.count()).where(same_day_resolved)
+    )
     same_day_median_resolution_time_hours = await session.scalar(
         select(_median_resolution_time_hours_expr()).where(same_day_resolved)
     )
@@ -271,7 +286,9 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
         select(func.count()).where(actionable_resolved)
     )
     actionable_resolved_within_72_hours_count = await session.scalar(
-        select(func.count()).where(actionable_resolved, _resolution_time_hours_expr() <= 72)
+        select(func.count()).where(
+            actionable_resolved, _resolution_time_hours_expr() <= 72
+        )
     )
 
     return {
@@ -281,10 +298,14 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
         "tickets_created_count": created_count or 0,
         "tickets_resolved_count": resolved_count or 0,
         "median_resolution_time_hours": (
-            round(median_resolution_time_hours, 1) if median_resolution_time_hours is not None else None
+            round(median_resolution_time_hours, 1)
+            if median_resolution_time_hours is not None
+            else None
         ),
         "mean_resolution_time_hours": (
-            round(mean_resolution_time_hours, 1) if mean_resolution_time_hours is not None else None
+            round(mean_resolution_time_hours, 1)
+            if mean_resolution_time_hours is not None
+            else None
         ),
         "tickets_resolved_within_48_hours_count": resolved_within_48_hours_count or 0,
         "resolved_within_48_hours_percentage": _percentage(
@@ -302,7 +323,9 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
     }
 
 
-async def get_volume_trend(session: AsyncSession, granularity: str, period: str) -> list[dict]:
+async def get_volume_trend(
+    session: AsyncSession, granularity: str, period: str
+) -> list[dict]:
     # "hour" matters for period=today/yesterday -- those spans collapse to a
     # single "day" bucket otherwise, which renders as one point on a line chart.
     if granularity not in ("hour", "day", "week", "month"):
@@ -310,12 +333,17 @@ async def get_volume_trend(session: AsyncSession, granularity: str, period: str)
     period_start, period_end = resolve_period(period)
 
     created_rows = await session.execute(
-        select(func.date_trunc(granularity, Ticket.created_at).label("bucket"), func.count())
+        select(
+            func.date_trunc(granularity, Ticket.created_at).label("bucket"),
+            func.count(),
+        )
         .where(Ticket.created_at.between(period_start, period_end))
         .group_by("bucket")
     )
     resolved_rows = await session.execute(
-        select(func.date_trunc(granularity, Ticket.closed_at).label("bucket"), func.count())
+        select(
+            func.date_trunc(granularity, Ticket.closed_at).label("bucket"), func.count()
+        )
         .where(Ticket.closed_at.between(period_start, period_end))
         .group_by("bucket")
     )
@@ -337,7 +365,9 @@ async def get_volume_trend(session: AsyncSession, granularity: str, period: str)
 async def get_pipelines(session: AsyncSession) -> dict:
     """Lookup for the pipeline_id filter used elsewhere -- avoids needing to
     know HubSpot's numeric pipeline IDs by heart."""
-    rows = await session.execute(select(Ticket.pipeline_id, Ticket.pipeline_label).distinct())
+    rows = await session.execute(
+        select(Ticket.pipeline_id, Ticket.pipeline_label).distinct()
+    )
     return {
         "pipelines": [
             {"pipeline_id": pipeline_id, "pipeline_label": pipeline_label}
@@ -358,7 +388,9 @@ async def get_stage_distribution(
     )
     if pipeline_id:
         stmt = stmt.where(Ticket.pipeline_id == pipeline_id)
-    rows = await session.execute(stmt.group_by(Ticket.pipeline_label, Ticket.stage_label))
+    rows = await session.execute(
+        stmt.group_by(Ticket.pipeline_label, Ticket.stage_label)
+    )
 
     breakdown: dict[str, dict[str, int]] = {}
     for pipeline_label, stage_label, count in rows.all():
@@ -432,7 +464,12 @@ async def get_module_tickets(session: AsyncSession, period: str) -> dict:
             else Ticket.hubspot_module == module
         )
         rows = await session.execute(
-            select(Ticket.ticket_id, Ticket.subject, Ticket.canonical_status, Ticket.owner_name)
+            select(
+                Ticket.ticket_id,
+                Ticket.subject,
+                Ticket.canonical_status,
+                Ticket.owner_name,
+            )
             .where(in_period, module_filter)
             .order_by(Ticket.created_at.desc())
             .limit(_DRILLDOWN_LIMIT)
@@ -468,7 +505,9 @@ async def get_source_distribution(session: AsyncSession, period: str) -> dict:
     )
     by_source: dict[str, int] = {}
     for source_type, record_source, count in rows.all():
-        label = source_type or ("Created directly" if record_source == "CRM_UI" else "Unknown")
+        label = source_type or (
+            "Created directly" if record_source == "CRM_UI" else "Unknown"
+        )
         by_source[label] = by_source.get(label, 0) + count
     by_source = dict(sorted(by_source.items(), key=lambda kv: -kv[1]))
     return {"by_source": by_source, "total_ticket_count": sum(by_source.values())}
@@ -494,12 +533,17 @@ async def get_status_tickets(
     -- scoped to the same lifecycle statuses that chart shows (excludes
     Resolved, same as get_status_distribution's frontend consumer)."""
     period_start, period_end = resolve_period(period)
-    filters = [Ticket.created_at.between(period_start, period_end), Ticket.canonical_status.in_(_OPEN_STATUSES)]
+    filters = [
+        Ticket.created_at.between(period_start, period_end),
+        Ticket.canonical_status.in_(_OPEN_STATUSES),
+    ]
     if pipeline_id:
         filters.append(Ticket.pipeline_id == pipeline_id)
 
     statuses = await session.execute(
-        select(Ticket.canonical_status, func.count()).where(*filters).group_by(Ticket.canonical_status)
+        select(Ticket.canonical_status, func.count())
+        .where(*filters)
+        .group_by(Ticket.canonical_status)
     )
 
     tickets_by_status = {}
@@ -526,7 +570,9 @@ async def get_status_tickets(
     return {"tickets_by_status": tickets_by_status}
 
 
-async def get_median_resolution_time_by_priority(session: AsyncSession, period: str) -> dict:
+async def get_median_resolution_time_by_priority(
+    session: AsyncSession, period: str
+) -> dict:
     """Median hours between a ticket being created and closed, broken down by
     priority. Median rather than mean -- see _median_resolution_time_hours_expr.
 
@@ -537,14 +583,18 @@ async def get_median_resolution_time_by_priority(session: AsyncSession, period: 
     the frontend flag that instead of presenting it as a stable trend."""
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
-        select(Ticket.derived_priority, _median_resolution_time_hours_expr(), func.count())
+        select(
+            Ticket.derived_priority, _median_resolution_time_hours_expr(), func.count()
+        )
         .where(Ticket.closed_at.between(period_start, period_end))
         .group_by(Ticket.derived_priority)
     )
     all_rows = rows.all()
     return {
         "median_resolution_time_hours_by_priority": {
-            priority: round(hours, 1) for priority, hours, _ in all_rows if hours is not None
+            priority: round(hours, 1)
+            for priority, hours, _ in all_rows
+            if hours is not None
         },
         "resolved_ticket_count_by_priority": {
             priority: count for priority, hours, count in all_rows if hours is not None
@@ -558,13 +608,19 @@ async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
     async def _breakdown(column, *extra_filters) -> dict:
         rows = await session.execute(
             select(column, func.count())
-            .where(Ticket.created_at.between(period_start, period_end), column.isnot(None), *extra_filters)
+            .where(
+                Ticket.created_at.between(period_start, period_end),
+                column.isnot(None),
+                *extra_filters,
+            )
             .group_by(column)
         )
         return dict(rows.all())
 
     def _breach_percentage(breakdown: dict) -> float | None:
-        evaluated = breakdown.get("Completed on time", 0) + breakdown.get("Completed late", 0)
+        evaluated = breakdown.get("Completed on time", 0) + breakdown.get(
+            "Completed late", 0
+        )
         return _percentage(breakdown.get("Completed late", 0), evaluated)
 
     # Automation-closed, passed-on, CRM-UI-created, and non-actionable
@@ -587,7 +643,9 @@ async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
             first_response_status_breakdown
         ),
         "resolution_sla_status_breakdown": resolution_status_breakdown,
-        "resolution_sla_breach_percentage": _breach_percentage(resolution_status_breakdown),
+        "resolution_sla_breach_percentage": _breach_percentage(
+            resolution_status_breakdown
+        ),
     }
 
 
@@ -645,7 +703,9 @@ async def get_csat(session: AsyncSession, period: str) -> dict:
     return {
         "total_response_count": sum(response_count_by_rating.values()),
         "response_count_by_rating": response_count_by_rating,
-        "normalized_csat_percentage": _normalized_csat_percentage(response_count_by_rating),
+        "normalized_csat_percentage": _normalized_csat_percentage(
+            response_count_by_rating
+        ),
         "unmatched_to_ticket_count": unmatched_to_ticket_count or 0,
         "rating_scale_confirmed": True,
     }
@@ -663,7 +723,12 @@ async def get_unmatched_csat_responses(session: AsyncSession, period: str) -> di
     )
     total = await session.scalar(select(func.count()).where(*filters))
     rows = await session.execute(
-        select(CsatResponse.submission_id, CsatResponse.rating, CsatResponse.submitted_at, CsatResponse.contact_id)
+        select(
+            CsatResponse.submission_id,
+            CsatResponse.rating,
+            CsatResponse.submitted_at,
+            CsatResponse.contact_id,
+        )
         .where(*filters)
         .order_by(CsatResponse.submitted_at.desc())
         .limit(_DRILLDOWN_LIMIT)
@@ -732,19 +797,29 @@ async def get_nps(session: AsyncSession, period: str) -> dict:
     )
 
     response_count_by_score: dict[int, int] = {}
-    responses_by_bucket: dict[str, list[dict]] = {"promoter": [], "passive": [], "detractor": []}
+    responses_by_bucket: dict[str, list[dict]] = {
+        "promoter": [],
+        "passive": [],
+        "detractor": [],
+    }
     for response_id, score, email, text, properties in rows.all():
         response_count_by_score[score] = response_count_by_score.get(score, 0) + 1
-        responses_by_bucket[_nps_bucket(score)].append({
-            "response_id": response_id,
-            "account_name": (properties or {}).get("company") or "Unknown",
-            "score": score,
-            "email": email,
-            "text": text,
-        })
+        responses_by_bucket[_nps_bucket(score)].append(
+            {
+                "response_id": response_id,
+                "account_name": (properties or {}).get("company") or "Unknown",
+                "score": score,
+                "email": email,
+                "text": text,
+            }
+        )
 
-    promoter_count = sum(c for s, c in response_count_by_score.items() if s >= _NPS_PROMOTER_MIN)
-    detractor_count = sum(c for s, c in response_count_by_score.items() if s <= _NPS_DETRACTOR_MAX)
+    promoter_count = sum(
+        c for s, c in response_count_by_score.items() if s >= _NPS_PROMOTER_MIN
+    )
+    detractor_count = sum(
+        c for s, c in response_count_by_score.items() if s <= _NPS_DETRACTOR_MAX
+    )
     total = sum(response_count_by_score.values())
     passive_count = total - promoter_count - detractor_count
 
@@ -754,7 +829,9 @@ async def get_nps(session: AsyncSession, period: str) -> dict:
         "passive_count": passive_count,
         "detractor_count": detractor_count,
         "response_count_by_score": response_count_by_score,
-        "nps_score": round((promoter_count - detractor_count) / total * 100, 1) if total else None,
+        "nps_score": round((promoter_count - detractor_count) / total * 100, 1)
+        if total
+        else None,
         "responses_by_bucket": responses_by_bucket,
     }
 
@@ -782,7 +859,10 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
         return dict(rows.all())
 
     async def _count_total(*extra_filters) -> int:
-        return await session.scalar(select(func.count()).where(in_period, *extra_filters)) or 0
+        return (
+            await session.scalar(select(func.count()).where(in_period, *extra_filters))
+            or 0
+        )
 
     base_rows = await session.execute(
         select(
@@ -800,7 +880,9 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
 
     actionable_by_owner = await _count_by_owner(Ticket.actionable.is_(True))
     closed_by_owner = await _count_by_owner(actionable_resolved)
-    frt_evaluated_by_owner = await _count_by_owner(Ticket.time_to_first_agent_reply_hours.isnot(None))
+    frt_evaluated_by_owner = await _count_by_owner(
+        Ticket.time_to_first_agent_reply_hours.isnot(None)
+    )
     frt_on_time_by_owner = await _count_by_owner(
         Ticket.time_to_first_agent_reply_hours.isnot(None),
         Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS,
@@ -827,7 +909,9 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     eng_escalated_by_owner: dict[str, int] = {}
     for owner_id, stage_timings in eng_stage_rows.all():
         if (stage_timings.get("engineering") or {}).get("entered_at"):
-            eng_escalated_by_owner[owner_id] = eng_escalated_by_owner.get(owner_id, 0) + 1
+            eng_escalated_by_owner[owner_id] = (
+                eng_escalated_by_owner.get(owner_id, 0) + 1
+            )
 
     # Scoped by the matched ticket's created_at, same convention as every
     # other column here -- see get_csat's docstring for why submitted_at
@@ -862,8 +946,12 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
             "closed_count": closed_count,
             "still_open_count": actionable_count - closed_count,
             "closure_rate_percentage": _percentage(closed_count, actionable_count),
-            "median_resolution_time_hours": round(median_hours, 1) if median_hours is not None else None,
-            "mean_resolution_time_hours": round(mean_hours, 1) if mean_hours is not None else None,
+            "median_resolution_time_hours": round(median_hours, 1)
+            if median_hours is not None
+            else None,
+            "mean_resolution_time_hours": round(mean_hours, 1)
+            if mean_hours is not None
+            else None,
             "first_response_sla_on_time_count": frt_on_time,
             "first_response_sla_missed_count": frt_missed,
             "first_response_sla_on_time_percentage": _percentage(
@@ -874,14 +962,23 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
                 fcr_true, fcr_evaluated_by_owner.get(owner_id, 0)
             ),
             "backline_escalation_count": escalated_by_owner.get(owner_id, 0),
-            "backline_escalation_percentage": _percentage(escalated_by_owner.get(owner_id, 0), count),
-            "resolved_by_backline_engineering_count": backline_resolved_by_owner.get(owner_id, 0),
+            "backline_escalation_percentage": _percentage(
+                escalated_by_owner.get(owner_id, 0), count
+            ),
+            "resolved_by_backline_engineering_count": backline_resolved_by_owner.get(
+                owner_id, 0
+            ),
             "escalated_to_engineering_count": eng_escalated_by_owner.get(owner_id, 0),
             "csat_response_count": sum(owner_csat_counts.values()),
-            "csat_normalized_percentage": _normalized_csat_percentage(owner_csat_counts),
+            "csat_normalized_percentage": _normalized_csat_percentage(
+                owner_csat_counts
+            ),
         }
 
-    rows = [_owner_row(owner_id, owner_name, count, median_hours, mean_hours) for owner_id, owner_name, count, median_hours, mean_hours in base]
+    rows = [
+        _owner_row(owner_id, owner_name, count, median_hours, mean_hours)
+        for owner_id, owner_name, count, median_hours, mean_hours in base
+    ]
 
     # Team-total row -- mirrors the reference reports' "TEAM TOTAL" row,
     # computed independently over every ticket in the period (assigned or
@@ -902,24 +999,30 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     team_row["actionable_count"] = sum(actionable_by_owner.values())
     team_row["non_actionable_count"] = team_total_count - team_row["actionable_count"]
     team_row["closed_count"] = sum(closed_by_owner.values())
-    team_row["still_open_count"] = team_row["actionable_count"] - team_row["closed_count"]
+    team_row["still_open_count"] = (
+        team_row["actionable_count"] - team_row["closed_count"]
+    )
     team_row["closure_rate_percentage"] = _percentage(
         team_row["closed_count"], team_row["actionable_count"]
     )
     team_row["first_response_sla_on_time_count"] = sum(frt_on_time_by_owner.values())
     team_row["first_response_sla_missed_count"] = sum(frt_missed_by_owner.values())
     team_row["first_response_sla_on_time_percentage"] = _percentage(
-        team_row["first_response_sla_on_time_count"], sum(frt_evaluated_by_owner.values())
+        team_row["first_response_sla_on_time_count"],
+        sum(frt_evaluated_by_owner.values()),
     )
     team_row["first_contact_resolution_true_count"] = sum(fcr_true_by_owner.values())
     team_row["first_contact_resolution_percentage"] = _percentage(
-        team_row["first_contact_resolution_true_count"], sum(fcr_evaluated_by_owner.values())
+        team_row["first_contact_resolution_true_count"],
+        sum(fcr_evaluated_by_owner.values()),
     )
     team_row["backline_escalation_count"] = sum(escalated_by_owner.values())
     team_row["backline_escalation_percentage"] = _percentage(
         team_row["backline_escalation_count"], team_total_count
     )
-    team_row["resolved_by_backline_engineering_count"] = sum(backline_resolved_by_owner.values())
+    team_row["resolved_by_backline_engineering_count"] = sum(
+        backline_resolved_by_owner.values()
+    )
     team_row["escalated_to_engineering_count"] = sum(eng_escalated_by_owner.values())
 
     # Same created_at scope as the per-owner rows, just without the
@@ -936,7 +1039,9 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     )
     team_csat_counts = dict(team_csat_rows.all())
     team_row["csat_response_count"] = sum(team_csat_counts.values())
-    team_row["csat_normalized_percentage"] = _normalized_csat_percentage(team_csat_counts)
+    team_row["csat_normalized_percentage"] = _normalized_csat_percentage(
+        team_csat_counts
+    )
 
     return [*rows, team_row]
 
@@ -953,7 +1058,9 @@ async def get_data_quality(session: AsyncSession, period: str) -> dict:
     resolved = Ticket.canonical_status == "Resolved"
 
     total_count = await session.scalar(
-        select(func.count()).where(Ticket.created_at.between(period_start, period_end), resolved)
+        select(func.count()).where(
+            Ticket.created_at.between(period_start, period_end), resolved
+        )
     )
     priority_inferred_count = await session.scalar(
         select(func.count()).where(
@@ -970,8 +1077,12 @@ async def get_data_quality(session: AsyncSession, period: str) -> dict:
         )
     )
     return {
-        "priority_inferred_percentage": _percentage(priority_inferred_count, total_count),
-        "uncategorized_ticket_percentage": _percentage(uncategorized_count, total_count),
+        "priority_inferred_percentage": _percentage(
+            priority_inferred_count, total_count
+        ),
+        "uncategorized_ticket_percentage": _percentage(
+            uncategorized_count, total_count
+        ),
     }
 
 

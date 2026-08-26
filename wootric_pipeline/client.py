@@ -32,7 +32,9 @@ class WootricClient:
             "Authorization": _basic_auth_header(),
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        async with session.post(url, headers=headers, data="grant_type=client_credentials") as resp:
+        async with session.post(
+            url, headers=headers, data="grant_type=client_credentials"
+        ) as resp:
             resp.raise_for_status()
             data = await resp.json()
         self._token = data["access_token"]

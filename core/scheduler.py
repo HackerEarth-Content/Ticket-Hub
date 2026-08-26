@@ -44,7 +44,10 @@ async def _sync_once() -> None:
         csat_stats = await pipeline.run_csat_incremental()
         nps_stats = await wootric_pipeline.run_incremental()
         logger.info(
-            "incremental_sync_complete", tickets=ticket_stats, csat=csat_stats, nps=nps_stats
+            "incremental_sync_complete",
+            tickets=ticket_stats,
+            csat=csat_stats,
+            nps=nps_stats,
         )
     except Exception:
         logger.exception("incremental_sync_failed")
@@ -64,7 +67,9 @@ def start_scheduler() -> AsyncIOScheduler:
         _sync_once,
         IntervalTrigger(minutes=_INTERVAL_MINUTES),
         id=_JOB_ID,
-        next_run_time=datetime.now(timezone.utc),  # run immediately on startup, not after the first interval
+        next_run_time=datetime.now(
+            timezone.utc
+        ),  # run immediately on startup, not after the first interval
         max_instances=1,  # don't overlap if a sync ever runs long
         coalesce=True,  # if we fall behind, run once on catch-up, not once per missed interval
     )
@@ -77,4 +82,3 @@ def start_scheduler() -> AsyncIOScheduler:
     )
     scheduler.start()
     return scheduler
-

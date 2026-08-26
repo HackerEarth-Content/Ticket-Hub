@@ -71,7 +71,9 @@ async def reconcile_pipeline_scope() -> dict:
 
     # .get(tid) is None (not `_SUPPORT_PIPELINE_ID`) for a ticket HubSpot no
     # longer returns at all -- deleted tickets get cleaned up here too.
-    stale_ids = [tid for tid in ticket_ids if current_pipelines.get(tid) != _SUPPORT_PIPELINE_ID]
+    stale_ids = [
+        tid for tid in ticket_ids if current_pipelines.get(tid) != _SUPPORT_PIPELINE_ID
+    ]
     await db_writer.delete_tickets(stale_ids)
 
     return {"checked": len(ticket_ids), "removed": len(stale_ids)}
@@ -103,7 +105,12 @@ def _match_ticket(
             closed_at = closed_at.replace(tzinfo=None)
         diff = abs((submitted_at - closed_at).total_seconds())
         if best_diff is None or diff < best_diff:
-            best_id, best_owner_id, best_owner_name, best_diff = ticket_id, owner_id, owner_name, diff
+            best_id, best_owner_id, best_owner_name, best_diff = (
+                ticket_id,
+                owner_id,
+                owner_name,
+                diff,
+            )
     return best_id, best_owner_id, best_owner_name
 
 
@@ -118,7 +125,9 @@ async def extract_csat(since_ms: int) -> list[CsatSubmission]:
         contact_by_submission = await client.fetch_submission_contacts(submission_ids)
         contact_ids = list(set(contact_by_submission.values()))
         tickets_by_contact = await client.fetch_contact_tickets(contact_ids)
-        candidate_ticket_ids = list({tid for tids in tickets_by_contact.values() for tid in tids})
+        candidate_ticket_ids = list(
+            {tid for tids in tickets_by_contact.values() for tid in tids}
+        )
         ticket_info = await db_writer.fetch_ticket_owner_info(candidate_ticket_ids)
 
         for raw in page:
@@ -126,9 +135,13 @@ async def extract_csat(since_ms: int) -> list[CsatSubmission]:
             contact_id = contact_by_submission.get(submission_id)
             candidates = tickets_by_contact.get(contact_id, []) if contact_id else []
             submitted_at = parse_iso(raw["properties"]["hs_submission_timestamp"])
-            ticket_id, owner_id, owner_name = _match_ticket(submitted_at, candidates, ticket_info)
+            ticket_id, owner_id, owner_name = _match_ticket(
+                submitted_at, candidates, ticket_info
+            )
             submissions.append(
-                CsatSubmission.from_raw(raw, contact_id, ticket_id, owner_id, owner_name)
+                CsatSubmission.from_raw(
+                    raw, contact_id, ticket_id, owner_id, owner_name
+                )
             )
     return submissions
 
@@ -165,7 +178,9 @@ def summarize(tickets: list[DashboardTicket]) -> dict:
         "by_derived_priority": dict(Counter(t.derived_priority for t in tickets)),
         "priority_inferred_pct": round(
             100 * sum(t.priority_inferred for t in tickets) / n, 1
-        ) if n else 0.0,
+        )
+        if n
+        else 0.0,
         "unknown_status_count": sum(t.canonical_status == "Unknown" for t in tickets),
     }
 

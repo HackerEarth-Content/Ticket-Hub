@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     FRONTEND_URL: str
     API_BASE_URL: str
-    ENVIRONMENT: str 
+    ENVIRONMENT: str
     # Comma-separated Google account emails allowed to sign in. Empty means
     # anyone with a Google account can sign in (current/dev behavior).
     ALLOWED_EMAILS: str = ""

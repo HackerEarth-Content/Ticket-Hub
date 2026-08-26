@@ -45,7 +45,9 @@ _BATCH_SIZE = 1000
 
 def _drop_pre_floor(rows: list[dict]) -> list[dict]:
     """Rows with no created_at pass through untouched (rare/unexpected, not our call to drop)."""
-    return [r for r in rows if r["created_at"] is None or r["created_at"] >= _CREATED_FLOOR]
+    return [
+        r for r in rows if r["created_at"] is None or r["created_at"] >= _CREATED_FLOOR
+    ]
 
 
 async def upsert_tickets(tickets: list[DashboardTicket]) -> None:
@@ -107,10 +109,14 @@ async def fetch_ticket_owner_info(ticket_ids: list[str]) -> dict[str, tuple]:
     session_factory = db_manager.session_factory()
     async with session_factory() as session:
         rows = await session.execute(
-            select(Ticket.ticket_id, Ticket.closed_at, Ticket.owner_id, Ticket.owner_name)
-            .where(Ticket.ticket_id.in_(ticket_ids))
+            select(
+                Ticket.ticket_id, Ticket.closed_at, Ticket.owner_id, Ticket.owner_name
+            ).where(Ticket.ticket_id.in_(ticket_ids))
         )
-        return {tid: (closed_at, owner_id, owner_name) for tid, closed_at, owner_id, owner_name in rows.all()}
+        return {
+            tid: (closed_at, owner_id, owner_name)
+            for tid, closed_at, owner_id, owner_name in rows.all()
+        }
 
 
 async def upsert_csat_responses(responses: list[CsatSubmission]) -> None:

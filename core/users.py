@@ -35,7 +35,9 @@ def _is_email_allowed(email: str) -> bool:
     process environment if .env isn't present (e.g. vars injected directly
     into the container instead of a mounted file -- that path still needs a
     restart to pick up changes)."""
-    raw = dotenv_values(_ENV_PATH).get("ALLOWED_EMAILS") or os.environ.get("ALLOWED_EMAILS", "")
+    raw = dotenv_values(_ENV_PATH).get("ALLOWED_EMAILS") or os.environ.get(
+        "ALLOWED_EMAILS", ""
+    )
     allowed = {e.strip().lower() for e in raw.split(",") if e.strip()}
     if not allowed:
         return True

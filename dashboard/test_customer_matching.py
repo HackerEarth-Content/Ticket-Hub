@@ -9,7 +9,13 @@ from dashboard.export import _format_hms
 def test_match_names_collapses_aliases():
     ticket_names = ["Entri", "Datakrew Private Limited", "Modmed"]
     matched, unmatched = match_names(
-        ["Entri India", "DataKrew", "Modmed (Non Tech)", "Modmed (Tech)", "Nonexistent Co"],
+        [
+            "Entri India",
+            "DataKrew",
+            "Modmed (Non Tech)",
+            "Modmed (Tech)",
+            "Nonexistent Co",
+        ],
         ticket_names,
     )
     assert matched["Entri"] == ["Entri India"]

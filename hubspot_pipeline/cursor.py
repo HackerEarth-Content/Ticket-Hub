@@ -28,7 +28,8 @@ async def set_cursor(value: datetime, key: str = TICKETS_KEY) -> None:
     async with session_factory() as session:
         stmt = insert(SyncCursor).values(key=key, last_synced_at=value)
         stmt = stmt.on_conflict_do_update(
-            index_elements=["key"], set_={"last_synced_at": stmt.excluded.last_synced_at}
+            index_elements=["key"],
+            set_={"last_synced_at": stmt.excluded.last_synced_at},
         )
         await session.execute(stmt)
         await session.commit()

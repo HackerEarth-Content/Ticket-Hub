@@ -14,10 +14,11 @@ from typing import AsyncIterator
 
 import aiohttp
 
-logger = logging.getLogger(__name__)
-
 from core.config import settings
 from hubspot_pipeline.stage_timing import STAGE_TIMING_STAGES
+
+logger = logging.getLogger(__name__)
+
 
 _BASE = "https://api.hubapi.com"
 
@@ -144,7 +145,9 @@ class HubSpotClient:
                     params: dict[str, str | int] = {"limit": 100}
                     if after:
                         params["after"] = after
-                    async with session.get(url, headers=_headers(), params=params) as resp:
+                    async with session.get(
+                        url, headers=_headers(), params=params
+                    ) as resp:
                         resp.raise_for_status()
                         data = await resp.json()
 
@@ -156,7 +159,10 @@ class HubSpotClient:
                     if not after:
                         break
         except aiohttp.ClientResponseError as e:
-            logger.warning("Owners lookup unavailable (status=%s) -- owner_name will be null", e.status)
+            logger.warning(
+                "Owners lookup unavailable (status=%s) -- owner_name will be null",
+                e.status,
+            )
             return {}
         return owners
 
@@ -178,15 +184,29 @@ class HubSpotClient:
     ) -> AsyncIterator[dict]:
         url = f"{_BASE}/crm/v3/objects/tickets/search"
         filters = [
-            {"propertyName": "hs_lastmodifieddate", "operator": "GT", "value": str(from_ms)},
-            {"propertyName": "hs_lastmodifieddate", "operator": "LTE", "value": str(to_ms)},
-            {"propertyName": "hs_pipeline", "operator": "EQ", "value": _SUPPORT_PIPELINE_ID},
+            {
+                "propertyName": "hs_lastmodifieddate",
+                "operator": "GT",
+                "value": str(from_ms),
+            },
+            {
+                "propertyName": "hs_lastmodifieddate",
+                "operator": "LTE",
+                "value": str(to_ms),
+            },
+            {
+                "propertyName": "hs_pipeline",
+                "operator": "EQ",
+                "value": _SUPPORT_PIPELINE_ID,
+            },
         ]
         body: dict = {
             "filterGroups": [{"filters": filters}],
             "properties": TICKET_PROPERTIES,
             "limit": settings.TICKET_PAGE_SIZE,
-            "sorts": [{"propertyName": "hs_lastmodifieddate", "direction": "ASCENDING"}],
+            "sorts": [
+                {"propertyName": "hs_lastmodifieddate", "direction": "ASCENDING"}
+            ],
         }
 
         async with session.post(url, headers=_headers(), json=body) as resp:
@@ -222,7 +242,8 @@ class HubSpotClient:
                     logger.warning(
                         "Pagination cap hit fetching %s..%s (window couldn't be split further, "
                         "likely a timestamp-clustered bulk update) -- stopping this window early",
-                        from_ms, to_ms,
+                        from_ms,
+                        to_ms,
                     )
                     return
                 resp.raise_for_status()
@@ -245,12 +266,22 @@ class HubSpotClient:
         they're past the 10k search-pagination cap, but each is comfortably
         under it alone."""
         eligibility_filters = [
-            {"propertyName": "hs_survey_type", "operator": "EQ", "value": CSAT_SURVEY_TYPE},
-            {"propertyName": "hs_survey_name", "operator": "EQ", "value": CSAT_SHARABLE_LINK_SURVEY_NAME},
+            {
+                "propertyName": "hs_survey_type",
+                "operator": "EQ",
+                "value": CSAT_SURVEY_TYPE,
+            },
+            {
+                "propertyName": "hs_survey_name",
+                "operator": "EQ",
+                "value": CSAT_SHARABLE_LINK_SURVEY_NAME,
+            },
         ]
         async with aiohttp.ClientSession() as session:
             for eligibility_filter in eligibility_filters:
-                async for page in self._fetch_csat_query(session, eligibility_filter, since_ms):
+                async for page in self._fetch_csat_query(
+                    session, eligibility_filter, since_ms
+                ):
                     yield page
 
     async def _fetch_csat_query(
@@ -258,13 +289,23 @@ class HubSpotClient:
     ) -> AsyncIterator[list[dict]]:
         url = f"{_BASE}/crm/v3/objects/feedback_submissions/search"
         body: dict = {
-            "filterGroups": [{"filters": [
-                eligibility_filter,
-                {"propertyName": "hs_submission_timestamp", "operator": "GTE", "value": str(since_ms)},
-            ]}],
+            "filterGroups": [
+                {
+                    "filters": [
+                        eligibility_filter,
+                        {
+                            "propertyName": "hs_submission_timestamp",
+                            "operator": "GTE",
+                            "value": str(since_ms),
+                        },
+                    ]
+                }
+            ],
             "properties": CSAT_SUBMISSION_PROPERTIES,
             "limit": 100,
-            "sorts": [{"propertyName": "hs_submission_timestamp", "direction": "ASCENDING"}],
+            "sorts": [
+                {"propertyName": "hs_submission_timestamp", "direction": "ASCENDING"}
+            ],
         }
         while True:
             async with session.post(url, headers=_headers(), json=body) as resp:
@@ -280,7 +321,9 @@ class HubSpotClient:
                 break
             body["after"] = after
 
-    async def fetch_submission_contacts(self, submission_ids: list[str]) -> dict[str, str]:
+    async def fetch_submission_contacts(
+        self, submission_ids: list[str]
+    ) -> dict[str, str]:
         """submission_id -> contact_id. The search endpoint above doesn't
         return associations, so this is a separate v4 batch association call --
         Feedback Submissions associate only to the contact who responded, not
@@ -314,7 +357,10 @@ class HubSpotClient:
         async with aiohttp.ClientSession() as session:
             for i in range(0, len(ticket_ids), 100):
                 chunk = ticket_ids[i : i + 100]
-                body = {"inputs": [{"id": tid} for tid in chunk], "properties": ["hs_pipeline"]}
+                body = {
+                    "inputs": [{"id": tid} for tid in chunk],
+                    "properties": ["hs_pipeline"],
+                }
                 async with session.post(url, headers=_headers(), json=body) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
@@ -322,7 +368,9 @@ class HubSpotClient:
                     results[r["id"]] = r.get("properties", {}).get("hs_pipeline")
         return results
 
-    async def fetch_contact_tickets(self, contact_ids: list[str]) -> dict[str, list[str]]:
+    async def fetch_contact_tickets(
+        self, contact_ids: list[str]
+    ) -> dict[str, list[str]]:
         """contact_id -> [ticket_id, ...] -- candidates for matching a CSAT
         response back to the ticket it was likely about (see
         hubspot_pipeline.pipeline._match_ticket)."""

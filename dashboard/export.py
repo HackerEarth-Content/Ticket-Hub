@@ -27,7 +27,10 @@ _HUBSPOT_PORTAL_ID = 2586902
 
 
 def _hubspot_ticket_url(ticket_id: str) -> str:
-    return f"https://app.hubspot.com/contacts/{_HUBSPOT_PORTAL_ID}/record/0-5/{ticket_id}"
+    return (
+        f"https://app.hubspot.com/contacts/{_HUBSPOT_PORTAL_ID}/record/0-5/{ticket_id}"
+    )
+
 
 _TICKET_COLUMNS = [
     "ticket_id",
@@ -65,13 +68,19 @@ def _cell_value(value):
     if isinstance(value, list):
         return ", ".join(str(v) for v in value)
     if hasattr(value, "isoformat"):
-        return value.replace(tzinfo=None).isoformat() if value.tzinfo else value.isoformat()
+        return (
+            value.replace(tzinfo=None).isoformat()
+            if value.tzinfo
+            else value.isoformat()
+        )
     return value
 
 
 def _autosize(ws: Worksheet) -> None:
     for i, column_cells in enumerate(ws.columns, start=1):
-        length = max((len(str(c.value)) for c in column_cells if c.value is not None), default=8)
+        length = max(
+            (len(str(c.value)) for c in column_cells if c.value is not None), default=8
+        )
         ws.column_dimensions[get_column_letter(i)].width = min(length + 2, 60)
 
 
@@ -239,7 +248,9 @@ def _format_hms(hours: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 
-async def build_customer_list_workbook(session: AsyncSession, input_names: list[str]) -> bytes:
+async def build_customer_list_workbook(
+    session: AsyncSession, input_names: list[str]
+) -> bytes:
     """Given a free-text list of company names, matches them (best-effort,
     see dashboard/customer_matching.py) against ticket customer_name values
     and builds the same 3-sheet report as the reference "Customer tickets
@@ -253,9 +264,9 @@ async def build_customer_list_workbook(session: AsyncSession, input_names: list[
     by_blackops: dict[str, list[tuple[str, float | None]]] = {}
     if matched:
         result = await session.execute(
-            select(Ticket.customer_name, Ticket.ticket_id, Ticket.time_to_close_hours).where(
-                Ticket.customer_name.in_(matched.keys())
-            )
+            select(
+                Ticket.customer_name, Ticket.ticket_id, Ticket.time_to_close_hours
+            ).where(Ticket.customer_name.in_(matched.keys()))
         )
         for blackops_name, ticket_id, hours in result.all():
             by_blackops.setdefault(blackops_name, []).append((ticket_id, hours))
@@ -291,14 +302,26 @@ async def build_customer_list_workbook(session: AsyncSession, input_names: list[
     _write_report_sheet(
         ws_summary,
         "Companies With Tickets — sorted by ticket count",
-        ["Company Name(s)", "Blackops Name", "Ticket Count", "Avg Resolution (hrs)", "Min Resolution (hrs)", "Max Resolution (hrs)"],
+        [
+            "Company Name(s)",
+            "Blackops Name",
+            "Ticket Count",
+            "Avg Resolution (hrs)",
+            "Min Resolution (hrs)",
+            "Max Resolution (hrs)",
+        ],
         summary_rows,
         decimal_columns=frozenset({4, 5, 6}),
     )
     _write_report_sheet(
         wb.create_sheet(_safe_sheet_title("Copy of Matched Tickets (Raw)")),
         "All Matched Tickets — Detail",
-        ["Blackops Name", "Ticket ID", "Resolution time in Hours", "Resolution Hours (decimal)"],
+        [
+            "Blackops Name",
+            "Ticket ID",
+            "Resolution time in Hours",
+            "Resolution Hours (decimal)",
+        ],
         detail_rows,
         decimal_columns=frozenset({4}),
     )
@@ -335,7 +358,7 @@ _CUSTOMER_TICKET_DETAIL_COLUMNS = [
 
 def _safe_sheet_title(name: str) -> str:
     """Excel sheet titles: max 31 chars, no : \\ / ? * [ ]."""
-    for ch in ':\\/?*[]':
+    for ch in ":\\/?*[]":
         name = name.replace(ch, " ")
     return name[:31]
 
@@ -352,7 +375,10 @@ async def build_customer_ticket_detail_workbook(
     columns = ["ticket_id"] + [attr for attr, _ in _CUSTOMER_TICKET_DETAIL_COLUMNS]
     rows = await session.execute(
         select(*[getattr(Ticket, c) for c in columns])
-        .where(Ticket.customer_name == customer_name, Ticket.created_at.between(period_start, period_end))
+        .where(
+            Ticket.customer_name == customer_name,
+            Ticket.created_at.between(period_start, period_end),
+        )
         .order_by(Ticket.created_at.desc())
     )
     tickets = rows.all()
@@ -361,7 +387,9 @@ async def build_customer_ticket_detail_workbook(
     ws = wb.active
     ws.title = _safe_sheet_title(customer_name)
 
-    headers = ["HubSpot Ticket ID"] + [label for _, label in _CUSTOMER_TICKET_DETAIL_COLUMNS]
+    headers = ["HubSpot Ticket ID"] + [
+        label for _, label in _CUSTOMER_TICKET_DETAIL_COLUMNS
+    ]
     heading = f"{customer_name} tickets: {period_start.date().isoformat()} – {period_end.date().isoformat()}"
     ws.append([heading])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
@@ -392,7 +420,9 @@ _EVENT_TICKET_DETAIL_COLUMNS = [
 ] + _CUSTOMER_TICKET_DETAIL_COLUMNS
 
 
-async def build_event_ticket_detail_workbook(session: AsyncSession, event_name: str) -> bytes:
+async def build_event_ticket_detail_workbook(
+    session: AsyncSession, event_name: str
+) -> bytes:
     """One sheet: every ticket ever raised for a single event, ticket-level
     (not aggregated). All-time, not period-scoped -- an event runs on its own
     fixed dates, not a recurring monthly window, so "download the report for
@@ -409,7 +439,9 @@ async def build_event_ticket_detail_workbook(session: AsyncSession, event_name: 
     ws = wb.active
     ws.title = _safe_sheet_title(event_name)
 
-    headers = ["HubSpot Ticket ID"] + [label for _, label in _EVENT_TICKET_DETAIL_COLUMNS]
+    headers = ["HubSpot Ticket ID"] + [
+        label for _, label in _EVENT_TICKET_DETAIL_COLUMNS
+    ]
     heading = f"{event_name} -- {len(tickets)} ticket(s), all-time"
     ws.append([heading])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
@@ -456,7 +488,9 @@ async def build_customer_counts_workbook(session: AsyncSession, period: str) -> 
     for name, count in identified:
         ws.append([name, count])
     ws.append(["(No account)", no_account_count or 0])
-    ws.append(["Total", sum(count for _, count in identified) + (no_account_count or 0)])
+    ws.append(
+        ["Total", sum(count for _, count in identified) + (no_account_count or 0)]
+    )
     _autosize(ws)
 
     buffer = io.BytesIO()
@@ -520,7 +554,10 @@ async def build_frontline_metric_dashboard_workbook() -> bytes:
     for group in groups:
         ws.append([group["label"]])
         ws.merge_cells(
-            start_row=ws.max_row, start_column=1, end_row=ws.max_row, end_column=len(sub_header_row)
+            start_row=ws.max_row,
+            start_column=1,
+            end_row=ws.max_row,
+            end_column=len(sub_header_row),
         )
         for cell in ws[ws.max_row]:
             cell.font = _FRONTLINE_GROUP_FONT
@@ -548,7 +585,10 @@ async def build_frontline_metric_dashboard_workbook() -> bytes:
         for note in notes_seen:
             ws.append([f"* {note}"])
             ws.merge_cells(
-                start_row=ws.max_row, start_column=1, end_row=ws.max_row, end_column=len(sub_header_row)
+                start_row=ws.max_row,
+                start_column=1,
+                end_row=ws.max_row,
+                end_column=len(sub_header_row),
             )
 
     ws.freeze_panes = "C5"

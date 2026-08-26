@@ -38,7 +38,9 @@ class NpsSubmission(BaseModel):
     properties: dict[str, Any]
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any], end_user: dict[str, Any] | None) -> "NpsSubmission":
+    def from_raw(
+        cls, raw: dict[str, Any], end_user: dict[str, Any] | None
+    ) -> "NpsSubmission":
         end_user = end_user or {}
         end_user_id = raw.get("end_user_id")
         properties = dict(end_user.get("properties") or {})

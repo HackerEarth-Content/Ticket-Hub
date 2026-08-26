@@ -33,14 +33,21 @@ from wootric_pipeline import pipeline as wootric_pipeline
 _FULL_PULL_FLOOR = datetime(2026, 2, 2, tzinfo=timezone.utc)
 
 
-async def _main(since_ms: int, out: str | None, write_db: bool, incremental: bool) -> None:
+async def _main(
+    since_ms: int, out: str | None, write_db: bool, incremental: bool
+) -> None:
     if incremental:
         await db_manager.initialize()
         ticket_stats = await pipeline.run_incremental()
         csat_stats = await pipeline.run_csat_incremental()
         nps_stats = await wootric_pipeline.run_incremental()
         await db_manager.close()
-        print(json.dumps({"tickets": ticket_stats, "csat": csat_stats, "nps": nps_stats}, indent=2))
+        print(
+            json.dumps(
+                {"tickets": ticket_stats, "csat": csat_stats, "nps": nps_stats},
+                indent=2,
+            )
+        )
         return
 
     tickets = await pipeline.extract(since_ms)
@@ -68,10 +75,16 @@ async def _main(since_ms: int, out: str | None, write_db: bool, incremental: boo
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="HubSpot dashboard extraction pipeline")
-    parser.add_argument("--days", type=int, default=30, help="Look back N days (default: 30)")
+    parser = argparse.ArgumentParser(
+        description="HubSpot dashboard extraction pipeline"
+    )
+    parser.add_argument(
+        "--days", type=int, default=30, help="Look back N days (default: 30)"
+    )
     parser.add_argument("--full", action="store_true", help="Full historical pull")
-    parser.add_argument("--out", type=str, default=None, help="Optional JSONL output path")
+    parser.add_argument(
+        "--out", type=str, default=None, help="Optional JSONL output path"
+    )
     parser.add_argument(
         "--write-db", action="store_true", help="Upsert results into the tickets table"
     )
@@ -88,7 +101,12 @@ def main() -> None:
         since_ms = int((time.time() - args.days * 86400) * 1000)
 
     asyncio.run(
-        _main(since_ms=since_ms, out=args.out, write_db=args.write_db, incremental=args.incremental)
+        _main(
+            since_ms=since_ms,
+            out=args.out,
+            write_db=args.write_db,
+            incremental=args.incremental,
+        )
     )
 
 

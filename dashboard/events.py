@@ -20,7 +20,10 @@ async def get_event_names(session: AsyncSession) -> dict:
     still be pickable, and the list grows on its own as new events show up
     in synced tickets, no code change needed."""
     rows = await session.execute(
-        select(Ticket.event_name).where(Ticket.event_name.isnot(None)).distinct().order_by(Ticket.event_name)
+        select(Ticket.event_name)
+        .where(Ticket.event_name.isnot(None))
+        .distinct()
+        .order_by(Ticket.event_name)
     )
     return {"event_names": [name for (name,) in rows.all()]}
 
@@ -39,4 +42,8 @@ async def get_event_ticket_volume(session: AsyncSession, period: str) -> dict:
         .group_by(Ticket.event_name)
         .order_by(func.count().desc())
     )
-    return {"events": [{"event_name": name, "ticket_count": count} for name, count in rows.all()]}
+    return {
+        "events": [
+            {"event_name": name, "ticket_count": count} for name, count in rows.all()
+        ]
+    }

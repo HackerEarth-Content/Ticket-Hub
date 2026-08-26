@@ -147,25 +147,29 @@ async def get_backline_ae_performance(session: AsyncSession, period: str) -> dic
                 owners.add(t.owner_name)
             categories.update(t.categories)
 
-        ae_performance.append({
-            "backline_engineer": ae,
-            "tickets_handled_count": len(tickets),
-            "tickets_resolved_count": resolved_count_by_ae.get(ae, 0),
-            "all_resolved": bool(tickets) and resolved_count == len(tickets),
-            "path_breakdown": path_counts,
-            "ae_stage_time_hours": _numeric_stats(ae_stage_hours),
-            "ae_stage_time_hours_by_path": {
-                path: _numeric_stats(hours) for path, hours in ae_stage_hours_by_path.items()
-            },
-            "ticket_resolution_time_hours": _numeric_stats(ticket_ttr_hours),
-            "ticket_resolution_time_hours_by_path": {
-                path: _numeric_stats(hours) for path, hours in ticket_ttr_hours_by_path.items()
-            },
-            "escalated_to_engineering_count": escalated_to_engineering,
-            "high_priority_ticket_count": high_priority,
-            "frontline_owners_supported_count": len(owners),
-            "categories_handled_count": len(categories),
-        })
+        ae_performance.append(
+            {
+                "backline_engineer": ae,
+                "tickets_handled_count": len(tickets),
+                "tickets_resolved_count": resolved_count_by_ae.get(ae, 0),
+                "all_resolved": bool(tickets) and resolved_count == len(tickets),
+                "path_breakdown": path_counts,
+                "ae_stage_time_hours": _numeric_stats(ae_stage_hours),
+                "ae_stage_time_hours_by_path": {
+                    path: _numeric_stats(hours)
+                    for path, hours in ae_stage_hours_by_path.items()
+                },
+                "ticket_resolution_time_hours": _numeric_stats(ticket_ttr_hours),
+                "ticket_resolution_time_hours_by_path": {
+                    path: _numeric_stats(hours)
+                    for path, hours in ticket_ttr_hours_by_path.items()
+                },
+                "escalated_to_engineering_count": escalated_to_engineering,
+                "high_priority_ticket_count": high_priority,
+                "frontline_owners_supported_count": len(owners),
+                "categories_handled_count": len(categories),
+            }
+        )
 
     return {"ae_performance": ae_performance}
 
@@ -207,20 +211,22 @@ async def get_backline_escalations(session: AsyncSession, period: str) -> dict:
         if entered_at and not timing.get("exited_at"):
             live_wait_hours = round((now - entered_at).total_seconds() / 3600, 1)
 
-        escalations.append({
-            "ticket_id": row.ticket_id,
-            "subject": row.subject,
-            "owner_name": row.owner_name,
-            "backline_engineer": row.backline_engineer,
-            "escalation_path": escalation_path,
-            "canonical_status": row.canonical_status,
-            "final_resolution": row.final_resolution,
-            "entered_at": timing.get("entered_at"),
-            "exited_at": timing.get("exited_at"),
-            "cumulative_time_hours": timing.get("cumulative_hours"),
-            "live_wait_time_hours": live_wait_hours,
-            "jira_link": row.jira_link,
-        })
+        escalations.append(
+            {
+                "ticket_id": row.ticket_id,
+                "subject": row.subject,
+                "owner_name": row.owner_name,
+                "backline_engineer": row.backline_engineer,
+                "escalation_path": escalation_path,
+                "canonical_status": row.canonical_status,
+                "final_resolution": row.final_resolution,
+                "entered_at": timing.get("entered_at"),
+                "exited_at": timing.get("exited_at"),
+                "cumulative_time_hours": timing.get("cumulative_hours"),
+                "live_wait_time_hours": live_wait_hours,
+                "jira_link": row.jira_link,
+            }
+        )
 
     truncated = len(escalations) > _DRILLDOWN_LIMIT
     return {
@@ -236,7 +242,9 @@ async def get_backline_stage_timing(session: AsyncSession, period: str) -> dict:
     tracked stages instead of just 2."""
     period_start, period_end = resolve_period(period)
     rows = await session.execute(
-        select(Ticket.stage_timings).where(Ticket.created_at.between(period_start, period_end))
+        select(Ticket.stage_timings).where(
+            Ticket.created_at.between(period_start, period_end)
+        )
     )
     all_timings = [r[0] for r in rows.all()]
     now = datetime.now(timezone.utc)
@@ -267,7 +275,9 @@ async def get_backline_stage_timing(session: AsyncSession, period: str) -> dict:
             "exited_count": exited_count,
             "still_in_queue_count": entered_count - exited_count,
             "average_cumulative_time_hours": (
-                round(sum(cumulative_hours) / len(cumulative_hours), 1) if cumulative_hours else None
+                round(sum(cumulative_hours) / len(cumulative_hours), 1)
+                if cumulative_hours
+                else None
             ),
             "minimum_cumulative_time_hours": (
                 round(min(cumulative_hours), 1) if cumulative_hours else None
@@ -275,7 +285,9 @@ async def get_backline_stage_timing(session: AsyncSession, period: str) -> dict:
             "maximum_cumulative_time_hours": (
                 round(max(cumulative_hours), 1) if cumulative_hours else None
             ),
-            "max_live_wait_time_hours": round(max(live_wait_hours), 1) if live_wait_hours else None,
+            "max_live_wait_time_hours": round(max(live_wait_hours), 1)
+            if live_wait_hours
+            else None,
         }
 
     return {"stage_timing": stage_timing}
@@ -293,7 +305,10 @@ async def get_backline_overview(session: AsyncSession, period: str) -> dict:
     closed = Ticket.canonical_status == "Resolved"
 
     async def _count(*extra_filters) -> int:
-        return await session.scalar(select(func.count()).where(in_period, *extra_filters)) or 0
+        return (
+            await session.scalar(select(func.count()).where(in_period, *extra_filters))
+            or 0
+        )
 
     total_count = await _count()
     actionable_count = await _count(actionable)
@@ -301,7 +316,9 @@ async def get_backline_overview(session: AsyncSession, period: str) -> dict:
     still_open_count = actionable_count - closed_count
     # "Backline Engineering" is resolution_taxonomy.json's bucket name for
     # final_resolution == "Issue Resolved Backline Engineering".
-    resolved_by_backline_count = await _count(actionable, Ticket.resolution_bucket == "Backline Engineering")
+    resolved_by_backline_count = await _count(
+        actionable, Ticket.resolution_bucket == "Backline Engineering"
+    )
     fcr_true_count = await _count(actionable, Ticket.fcr.is_(True))
 
     # Engineering-stage escalation lives in the stage_timings JSONB blob, so

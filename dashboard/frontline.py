@@ -6,7 +6,6 @@ KPIs) purely by domain; nothing here is architecturally special.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +30,11 @@ _FCR_FAST_RESOLUTION_HOURS = 24
 # sitting in New/Open/Pending (or "Bugs reviewed", also "Closing") isn't what
 # this metric should flag, only ones stalled waiting on a reminder/closure
 # email.
-_AWAITING_REPLY_STAGES = ("Pending", "Reminder Email to be Sent", "Closure Email to be Sent")
+_AWAITING_REPLY_STAGES = (
+    "Pending",
+    "Reminder Email to be Sent",
+    "Closure Email to be Sent",
+)
 
 # Anomaly/uncategorized drill-down lists are capped so a bad data period
 # can't return an unbounded payload -- callers see `truncated` when it bites.
@@ -55,12 +58,17 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         Ticket.actionable.is_(True)
         & Ticket.time_to_first_agent_reply_hours.is_(None)
         & Ticket.stage_label.in_(_AWAITING_REPLY_STAGES)
-        & (func.extract("epoch", func.now() - Ticket.created_at) / 3600 > _FRT_SLA_HOURS)
+        & (
+            func.extract("epoch", func.now() - Ticket.created_at) / 3600
+            > _FRT_SLA_HOURS
+        )
         & ~_FRT_ALWAYS_ON_TIME
     )
 
     async def _counts(*extra_filters):
-        return await session.scalar(select(func.count()).where(in_period, *extra_filters))
+        return await session.scalar(
+            select(func.count()).where(in_period, *extra_filters)
+        )
 
     on_time_count = await _counts(actionable_resolved, replied, on_time)
     late_count = await _counts(actionable_resolved, replied, ~on_time)
@@ -108,16 +116,18 @@ async def get_frontline_fcr(session: AsyncSession, period: str) -> dict:
     # Scored against actionable, resolved tickets only -- matches the
     # reference report's closed_df scope.
     actionable_resolved = _actionable_and_resolved()
-    resolved_within_a_day = (
-        Ticket.closed_at.isnot(None)
-        & (func.extract("epoch", Ticket.closed_at - Ticket.created_at) / 3600 <= _FCR_FAST_RESOLUTION_HOURS)
+    resolved_within_a_day = Ticket.closed_at.isnot(None) & (
+        func.extract("epoch", Ticket.closed_at - Ticket.created_at) / 3600
+        <= _FCR_FAST_RESOLUTION_HOURS
     )
 
     fcr_true = await session.scalar(
         select(func.count()).where(in_period, actionable_resolved, Ticket.fcr.is_(True))
     )
     fcr_false = await session.scalar(
-        select(func.count()).where(in_period, actionable_resolved, Ticket.fcr.is_(False))
+        select(func.count()).where(
+            in_period, actionable_resolved, Ticket.fcr.is_(False)
+        )
     )
     fcr_fast = await session.scalar(
         select(func.count()).where(
@@ -135,7 +145,9 @@ async def get_frontline_fcr(session: AsyncSession, period: str) -> dict:
     }
 
 
-async def get_frontline_resolution_ownership(session: AsyncSession, period: str) -> dict:
+async def get_frontline_resolution_ownership(
+    session: AsyncSession, period: str
+) -> dict:
     """Who actually resolves tickets -- Support/Engineering/Backline/
     Automation/etc, off the final_resolution -> bucket taxonomy. Reference
     report's Resolution Ownership / Dependency Distribution block."""
@@ -260,7 +272,13 @@ async def get_uncategorized_tickets(session: AsyncSession, period: str) -> dict:
     )
     total = await session.scalar(select(func.count()).where(*filters))
     rows = await session.execute(
-        select(Ticket.ticket_id, Ticket.subject, Ticket.owner_name, Ticket.final_resolution, Ticket.created_at)
+        select(
+            Ticket.ticket_id,
+            Ticket.subject,
+            Ticket.owner_name,
+            Ticket.final_resolution,
+            Ticket.created_at,
+        )
         .where(*filters)
         .order_by(Ticket.created_at.desc())
         .limit(_DRILLDOWN_LIMIT)

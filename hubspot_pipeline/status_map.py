@@ -17,10 +17,7 @@ UNKNOWN_STATUS = "Unknown"
 
 def _load() -> dict[str, dict[str, str]]:
     data = json.loads(_MAP_PATH.read_text())
-    return {
-        pid: p["stages"]
-        for pid, p in data.get("pipelines", {}).items()
-    }
+    return {pid: p["stages"] for pid, p in data.get("pipelines", {}).items()}
 
 
 _STAGE_TO_STATUS: dict[str, dict[str, str]] = _load()

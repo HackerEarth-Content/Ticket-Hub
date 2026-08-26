@@ -1,6 +1,6 @@
 """Self-check for the created_at floor filter: run `python hubspot_pipeline/test_db_writer.py`."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from hubspot_pipeline.db_writer import _CREATED_FLOOR, _drop_pre_floor
 

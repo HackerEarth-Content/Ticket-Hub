@@ -9,23 +9,44 @@ from __future__ import annotations
 _URGENT_KEYWORDS = ("URGENT", "[P1]")
 _HIGH_KEYWORDS = ("CRITICAL", "DOWN")
 
-_HIGH_CATEGORIES = frozenset({
-    "Test Loading Issues", "Unable to Login", "Login issues", "Webcam",
-    "Audio/Video Issue", "IDE/Compiler", "Proctoring B2C",
-})
-_MEDIUM_CATEGORIES = frozenset({
-    "Submission Related", "Test Access", "Dashboard Issues", "Result enquiry",
-    "Team Management",
-})
-_LOW_CATEGORIES = frozenset({
-    "Sales Enquiry", "Contest Info", "Registration Related", "Spam",
-    "Not Actionable", "No Action Required",
-})
+_HIGH_CATEGORIES = frozenset(
+    {
+        "Test Loading Issues",
+        "Unable to Login",
+        "Login issues",
+        "Webcam",
+        "Audio/Video Issue",
+        "IDE/Compiler",
+        "Proctoring B2C",
+    }
+)
+_MEDIUM_CATEGORIES = frozenset(
+    {
+        "Submission Related",
+        "Test Access",
+        "Dashboard Issues",
+        "Result enquiry",
+        "Team Management",
+    }
+)
+_LOW_CATEGORIES = frozenset(
+    {
+        "Sales Enquiry",
+        "Contest Info",
+        "Registration Related",
+        "Spam",
+        "Not Actionable",
+        "No Action Required",
+    }
+)
 
 # Stages where a bug is still open for triage -- floor priority at MEDIUM.
-_BUG_PENDING_STAGES = frozenset({
-    "Bugs pending on Backline/AE", "Bugs pending on QA/Platform",
-})
+_BUG_PENDING_STAGES = frozenset(
+    {
+        "Bugs pending on Backline/AE",
+        "Bugs pending on QA/Platform",
+    }
+)
 
 _RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "URGENT": 3}
 

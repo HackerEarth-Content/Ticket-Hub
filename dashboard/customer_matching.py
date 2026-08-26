@@ -16,8 +16,17 @@ import re
 
 _PARENS_RE = re.compile(r"\([^)]*\)")
 _STOPWORDS = {
-    "india", "pvt", "ltd", "private", "limited", "llp", "inc",
-    "incorporated", "technologies", "technology", "account",
+    "india",
+    "pvt",
+    "ltd",
+    "private",
+    "limited",
+    "llp",
+    "inc",
+    "incorporated",
+    "technologies",
+    "technology",
+    "account",
 }
 _FUZZY_CUTOFF = 0.75
 _MIN_SUBSTRING_LEN = 4
@@ -62,7 +71,9 @@ def match_names(
                 norm_input, list(normalized_tickets.values()), n=1, cutoff=_FUZZY_CUTOFF
             )
             if close:
-                best_ticket = next(t for t, n in normalized_tickets.items() if n == close[0])
+                best_ticket = next(
+                    t for t, n in normalized_tickets.items() if n == close[0]
+                )
 
         if best_ticket is not None:
             matched.setdefault(best_ticket, []).append(input_name)

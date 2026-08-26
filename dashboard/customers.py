@@ -26,7 +26,9 @@ from dashboard.utils import (
 _TOP_N_CUSTOMERS = 15
 
 
-async def _top_customer_names(session: AsyncSession, in_period, limit: int | None) -> list[str]:
+async def _top_customer_names(
+    session: AsyncSession, in_period, limit: int | None
+) -> list[str]:
     query = (
         select(Ticket.customer_name, func.count())
         .where(in_period, Ticket.customer_name.isnot(None))
@@ -66,7 +68,9 @@ async def get_customer_ticket_volume(session: AsyncSession, period: str) -> dict
         .group_by(Ticket.customer_name)
         .order_by(func.count().desc())
     )
-    identified = [{"customer_name": name, "ticket_count": count} for name, count in rows.all()]
+    identified = [
+        {"customer_name": name, "ticket_count": count} for name, count in rows.all()
+    ]
 
     no_account_count = await session.scalar(
         select(func.count()).where(in_period, Ticket.customer_name.is_(None))
@@ -170,7 +174,9 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         select(
             Ticket.customer_name,
             _median_resolution_time_hours_expr(),
-            func.percentile_cont(0.5).within_group(Ticket.time_to_first_agent_reply_hours),
+            func.percentile_cont(0.5).within_group(
+                Ticket.time_to_first_agent_reply_hours
+            ),
         )
         .where(*scoped, _actionable_and_resolved())
         .group_by(Ticket.customer_name)
@@ -187,7 +193,10 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
     # Backlog is "right now" -- deliberately not scoped to `in_period`.
     backlog_rows = await session.execute(
         select(Ticket.customer_name, func.count())
-        .where(Ticket.customer_name.in_(top_customers), Ticket.canonical_status.in_(_OPEN_STATUSES))
+        .where(
+            Ticket.customer_name.in_(top_customers),
+            Ticket.canonical_status.in_(_OPEN_STATUSES),
+        )
         .group_by(Ticket.customer_name)
     )
 
@@ -218,11 +227,15 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
             round(median_resolution, 1) if median_resolution is not None else None
         )
         by_customer[name]["median_first_response_hours"] = (
-            round(median_first_response, 1) if median_first_response is not None else None
+            round(median_first_response, 1)
+            if median_first_response is not None
+            else None
         )
     for name, escalated_count, total_count in escalation_rows.all():
         by_customer[name]["escalated_count"] = escalated_count
-        by_customer[name]["escalated_percentage"] = _percentage(escalated_count, total_count)
+        by_customer[name]["escalated_percentage"] = _percentage(
+            escalated_count, total_count
+        )
     for name, count in backlog_rows.all():
         by_customer[name]["open_backlog_count"] = count
 

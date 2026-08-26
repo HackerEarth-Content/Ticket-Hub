@@ -93,7 +93,9 @@ def _period_for_quarter(months: list[tuple[int, int]]) -> str:
     return f"custom:{start_year:04d}-{start_month:02d}-01:{end_year:04d}-{end_month:02d}-{last_day:02d}"
 
 
-async def _get_csat_overall(session: AsyncSession, start: datetime, end: datetime) -> dict:
+async def _get_csat_overall(
+    session: AsyncSession, start: datetime, end: datetime
+) -> dict:
     """Same normalized-CSAT formula as utils.get_csat, but over every survey
     response in the window regardless of whether it matched a ticket -- the
     sheet's "includes feedback for tickets that are not yet raised" row."""
@@ -105,11 +107,15 @@ async def _get_csat_overall(session: AsyncSession, start: datetime, end: datetim
     response_count_by_rating = dict(rows.all())
     return {
         "response_count_by_rating": response_count_by_rating,
-        "normalized_csat_percentage": _normalized_csat_percentage(response_count_by_rating),
+        "normalized_csat_percentage": _normalized_csat_percentage(
+            response_count_by_rating
+        ),
     }
 
 
-async def _get_nps_mean_score(session: AsyncSession, start: datetime, end: datetime) -> float | None:
+async def _get_nps_mean_score(
+    session: AsyncSession, start: datetime, end: datetime
+) -> float | None:
     mean_score = await session.scalar(
         select(func.avg(NpsResponse.score)).where(
             NpsResponse.created_at.between(start, end),
@@ -119,17 +125,25 @@ async def _get_nps_mean_score(session: AsyncSession, start: datetime, end: datet
     return round(mean_score, 2) if mean_score is not None else None
 
 
-async def _ttr_block(session: AsyncSession, start: datetime, end: datetime, *filters) -> dict:
+async def _ttr_block(
+    session: AsyncSession, start: datetime, end: datetime, *filters
+) -> dict:
     """Count / <=3-day count / mean resolution time for tickets closed in
     the window and matching `filters` -- shared shape behind the sheet's
     per-resolving-team TTR blocks (Engineering, Backline incl/excl bug bounty)."""
     resolved_in_window = Ticket.closed_at.between(start, end)
-    total = await session.scalar(select(func.count()).where(resolved_in_window, *filters))
+    total = await session.scalar(
+        select(func.count()).where(resolved_in_window, *filters)
+    )
     within_3_days = await session.scalar(
-        select(func.count()).where(resolved_in_window, *filters, _resolution_time_hours_expr() <= 72)
+        select(func.count()).where(
+            resolved_in_window, *filters, _resolution_time_hours_expr() <= 72
+        )
     )
     mean_hours = await session.scalar(
-        select(func.avg(_resolution_time_hours_expr())).where(resolved_in_window, *filters)
+        select(func.avg(_resolution_time_hours_expr())).where(
+            resolved_in_window, *filters
+        )
     )
     return {
         "count": total or 0,
@@ -149,9 +163,14 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     csat_overall = await _get_csat_overall(session, period_start, period_end)
     nps = await utils.get_nps(session, period)
     nps_mean = await _get_nps_mean_score(session, period_start, period_end)
-    engineering = await _ttr_block(session, period_start, period_end, Ticket.resolution_bucket == "Engineering")
+    engineering = await _ttr_block(
+        session, period_start, period_end, Ticket.resolution_bucket == "Engineering"
+    )
     backline = await _ttr_block(
-        session, period_start, period_end, Ticket.resolution_bucket == "Backline Engineering"
+        session,
+        period_start,
+        period_end,
+        Ticket.resolution_bucket == "Backline Engineering",
     )
 
     in_period = Ticket.created_at.between(period_start, period_end)
@@ -173,12 +192,16 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     )
     frt_on_time_count = (
         await session.scalar(
-            select(func.count()).where(in_period, actionable_resolved, replied, on_time, ~_FRT_ALWAYS_ON_TIME)
+            select(func.count()).where(
+                in_period, actionable_resolved, replied, on_time, ~_FRT_ALWAYS_ON_TIME
+            )
         )
         + frt_credited_count
     )
     frt_missed_count = await session.scalar(
-        select(func.count()).where(in_period, actionable_resolved, replied, ~on_time, ~_FRT_ALWAYS_ON_TIME)
+        select(func.count()).where(
+            in_period, actionable_resolved, replied, ~on_time, ~_FRT_ALWAYS_ON_TIME
+        )
     )
 
     # HubSpot's own native SLA status, alongside this card's own custom
@@ -199,20 +222,28 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     # Non-Actionable backlog, matching neither the mean nor the median the
     # reference report shows).
     actionable_resolved_created = actionable_resolved & in_period
-    ttr_resolved_count = await session.scalar(select(func.count()).where(actionable_resolved_created))
+    ttr_resolved_count = await session.scalar(
+        select(func.count()).where(actionable_resolved_created)
+    )
     mttr_hours = await session.scalar(
-        select(func.avg(_resolution_time_hours_expr())).where(actionable_resolved_created)
+        select(func.avg(_resolution_time_hours_expr())).where(
+            actionable_resolved_created
+        )
     )
     median_hours = await session.scalar(
         select(_median_resolution_time_hours_expr()).where(actionable_resolved_created)
     )
     ttr_within_3_days_count = await session.scalar(
-        select(func.count()).where(actionable_resolved_created, _resolution_time_hours_expr() <= 72)
+        select(func.count()).where(
+            actionable_resolved_created, _resolution_time_hours_expr() <= 72
+        )
     )
     resolution_sla_breakdown = sla["resolution_sla_status_breakdown"]
     resolution_sla_on_time_count = resolution_sla_breakdown.get("Completed on time", 0)
     resolution_sla_breached_count = resolution_sla_breakdown.get("Completed late", 0)
-    resolution_sla_evaluated_count = resolution_sla_on_time_count + resolution_sla_breached_count
+    resolution_sla_evaluated_count = (
+        resolution_sla_on_time_count + resolution_sla_breached_count
+    )
 
     bucket_counts = ownership["ticket_count_by_resolution_bucket"]
     support_count = bucket_counts.get("Support", 0)
@@ -225,20 +256,31 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "frt_sla_breached_count": frt_sla_breached_count,
         "frt_on_time_percentage": _percentage(frt_on_time_count, actionable_total),
         "frt_missed_percentage": _percentage(frt_missed_count, actionable_total),
-        "frt_sla_on_time_percentage": _percentage(frt_sla_on_time_count, frt_sla_evaluated_count),
-        "frt_sla_breached_percentage": _percentage(frt_sla_breached_count, frt_sla_evaluated_count),
+        "frt_sla_on_time_percentage": _percentage(
+            frt_sla_on_time_count, frt_sla_evaluated_count
+        ),
+        "frt_sla_breached_percentage": _percentage(
+            frt_sla_breached_count, frt_sla_evaluated_count
+        ),
         "fcr_true_count": fcr["fcr_true_count"],
         "fcr_false_count": fcr["fcr_false_count"],
         "fcr_within_24h_count": fcr["fcr_resolved_within_24_hours_count"],
         "fcr_percentage": fcr["first_contact_resolution_percentage"],
         "fcr_within_24h_percentage": _percentage(
-            fcr["fcr_resolved_within_24_hours_count"], fcr["fcr_true_count"] + fcr["fcr_false_count"]
+            fcr["fcr_resolved_within_24_hours_count"],
+            fcr["fcr_true_count"] + fcr["fcr_false_count"],
         ),
         "mttr_hours": round(mttr_hours, 1) if mttr_hours is not None else None,
         "mttr_days": round(mttr_hours / 24, 2) if mttr_hours is not None else None,
-        "median_resolution_hours": round(median_hours, 1) if median_hours is not None else None,
-        "median_resolution_days": round(median_hours / 24, 2) if median_hours is not None else None,
-        "resolved_within_3_days_percentage": _percentage(ttr_within_3_days_count, ttr_resolved_count),
+        "median_resolution_hours": round(median_hours, 1)
+        if median_hours is not None
+        else None,
+        "median_resolution_days": round(median_hours / 24, 2)
+        if median_hours is not None
+        else None,
+        "resolved_within_3_days_percentage": _percentage(
+            ttr_within_3_days_count, ttr_resolved_count
+        ),
         "resolution_sla_breached_count": resolution_sla_breached_count,
         "resolution_sla_on_time_percentage": _percentage(
             resolution_sla_on_time_count, resolution_sla_evaluated_count
@@ -253,14 +295,22 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "resolved_by_support_automation_percentage": _percentage(
             support_count + automation_count, actionable_total
         ),
-        "resolved_by_engineering_percentage": _percentage(bucket_counts.get("Engineering", 0), actionable_total),
+        "resolved_by_engineering_percentage": _percentage(
+            bucket_counts.get("Engineering", 0), actionable_total
+        ),
         "resolved_by_backline_percentage": _percentage(
             bucket_counts.get("Backline Engineering", 0), actionable_total
         ),
-        "csat_overall_unhappy_count": csat_overall["response_count_by_rating"].get(0, 0),
-        "csat_overall_neutral_count": csat_overall["response_count_by_rating"].get(1, 0),
+        "csat_overall_unhappy_count": csat_overall["response_count_by_rating"].get(
+            0, 0
+        ),
+        "csat_overall_neutral_count": csat_overall["response_count_by_rating"].get(
+            1, 0
+        ),
         "csat_overall_happy_count": csat_overall["response_count_by_rating"].get(2, 0),
-        "csat_overall_normalized_percentage": csat_overall["normalized_csat_percentage"],
+        "csat_overall_normalized_percentage": csat_overall[
+            "normalized_csat_percentage"
+        ],
         "csat_raised_unhappy_count": csat_raised["response_count_by_rating"].get(0, 0),
         "csat_raised_neutral_count": csat_raised["response_count_by_rating"].get(1, 0),
         "csat_raised_happy_count": csat_raised["response_count_by_rating"].get(2, 0),
@@ -268,8 +318,12 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "nps_promoter_count": nps["promoter_count"],
         "nps_passive_count": nps["passive_count"],
         "nps_detractor_count": nps["detractor_count"],
-        "nps_promoter_percentage": _percentage(nps["promoter_count"], nps["total_response_count"]),
-        "nps_detractor_percentage": _percentage(nps["detractor_count"], nps["total_response_count"]),
+        "nps_promoter_percentage": _percentage(
+            nps["promoter_count"], nps["total_response_count"]
+        ),
+        "nps_detractor_percentage": _percentage(
+            nps["detractor_count"], nps["total_response_count"]
+        ),
         "nps_score": nps["nps_score"],
         "nps_mean_score": nps_mean,
         # engineering["count"]/backline["count"] aren't exposed here -- they'd
@@ -277,11 +331,15 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         # above (this dict's TTR rows add the *timing* view: how fast, not
         # how many, which the ownership rows already cover).
         "engineering_resolved_within_3_days_count": engineering["within_3_days_count"],
-        "engineering_resolved_within_3_days_percentage": engineering["within_3_days_percentage"],
+        "engineering_resolved_within_3_days_percentage": engineering[
+            "within_3_days_percentage"
+        ],
         "engineering_mttr_hours": engineering["mean_hours"],
         "engineering_mttr_days": engineering["mean_days"],
         "backline_resolved_within_3_days_count": backline["within_3_days_count"],
-        "backline_resolved_within_3_days_percentage": backline["within_3_days_percentage"],
+        "backline_resolved_within_3_days_percentage": backline[
+            "within_3_days_percentage"
+        ],
         "backline_mttr_hours": backline["mean_hours"],
         "backline_mttr_days": backline["mean_days"],
     }
@@ -310,93 +368,354 @@ METRIC_GROUPS: list[dict] = [
         "key": "frt",
         "label": "First Response Time (FRT)",
         "metrics": [
-            {"key": "actionable_tickets", "label": "# of actionable tickets", "format": "number", "target": "-"},
-            {"key": "frt_on_time_count", "label": "# of on-time FRT SLA (30 min) tickets", "format": "number", "target": "-"},
-            {"key": "frt_missed_count", "label": "# of missed FRT SLA tickets", "format": "number", "target": "-"},
-            {"key": "frt_sla_breached_count", "label": "# of SLA breached tickets (first response, HubSpot native)", "format": "number", "target": "-", "note": _FRT_SLA_NOTE},
-            {"key": "frt_on_time_percentage", "label": "% of on-time FRT SLA (30 min) tickets", "format": "percent", "target": ">=80%"},
-            {"key": "frt_missed_percentage", "label": "% of missed FRT SLA tickets", "format": "percent", "target": "<=20%"},
-            {"key": "frt_sla_on_time_percentage", "label": "% SLA on-time (first response, HubSpot native)", "format": "percent", "target": "-", "note": _FRT_SLA_NOTE},
-            {"key": "frt_sla_breached_percentage", "label": "% SLA breached (first response, HubSpot native)", "format": "percent", "target": "<=20%", "note": _FRT_SLA_NOTE},
+            {
+                "key": "actionable_tickets",
+                "label": "# of actionable tickets",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "frt_on_time_count",
+                "label": "# of on-time FRT SLA (30 min) tickets",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "frt_missed_count",
+                "label": "# of missed FRT SLA tickets",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "frt_sla_breached_count",
+                "label": "# of SLA breached tickets (first response, HubSpot native)",
+                "format": "number",
+                "target": "-",
+                "note": _FRT_SLA_NOTE,
+            },
+            {
+                "key": "frt_on_time_percentage",
+                "label": "% of on-time FRT SLA (30 min) tickets",
+                "format": "percent",
+                "target": ">=80%",
+            },
+            {
+                "key": "frt_missed_percentage",
+                "label": "% of missed FRT SLA tickets",
+                "format": "percent",
+                "target": "<=20%",
+            },
+            {
+                "key": "frt_sla_on_time_percentage",
+                "label": "% SLA on-time (first response, HubSpot native)",
+                "format": "percent",
+                "target": "-",
+                "note": _FRT_SLA_NOTE,
+            },
+            {
+                "key": "frt_sla_breached_percentage",
+                "label": "% SLA breached (first response, HubSpot native)",
+                "format": "percent",
+                "target": "<=20%",
+                "note": _FRT_SLA_NOTE,
+            },
         ],
     },
     {
         "key": "fcr",
         "label": "First Contact Resolution (FCR)",
         "metrics": [
-            {"key": "fcr_true_count", "label": "# of tickets FCR (<=3 email) = Yes", "format": "number", "target": "-"},
-            {"key": "fcr_false_count", "label": "# of tickets FCR (<=3 email) = No", "format": "number", "target": "-"},
-            {"key": "fcr_within_24h_count", "label": "# of FCR=Yes tickets resolved <=24h", "format": "number", "target": "-"},
-            {"key": "fcr_percentage", "label": "FCR %", "format": "percent", "target": ">=60%"},
-            {"key": "fcr_within_24h_percentage", "label": "% of FCR tickets resolved within 24h", "format": "percent", "target": ">=50%"},
+            {
+                "key": "fcr_true_count",
+                "label": "# of tickets FCR (<=3 email) = Yes",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "fcr_false_count",
+                "label": "# of tickets FCR (<=3 email) = No",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "fcr_within_24h_count",
+                "label": "# of FCR=Yes tickets resolved <=24h",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "fcr_percentage",
+                "label": "FCR %",
+                "format": "percent",
+                "target": ">=60%",
+            },
+            {
+                "key": "fcr_within_24h_percentage",
+                "label": "% of FCR tickets resolved within 24h",
+                "format": "percent",
+                "target": ">=50%",
+            },
         ],
     },
     {
         "key": "ttr",
         "label": "Time To Resolve (TTR)",
         "metrics": [
-            {"key": "mttr_hours", "label": "MTTR (avg resolution time, hrs)", "format": "hours", "target": "<=72 Hrs"},
-            {"key": "mttr_days", "label": "MTTR (avg resolution time, days)", "format": "days", "target": "<=3 Days"},
-            {"key": "median_resolution_hours", "label": "Median resolution (hrs)", "format": "hours", "target": "6 Hrs"},
-            {"key": "median_resolution_days", "label": "Median resolution (days)", "format": "days", "target": "0.25 Days"},
-            {"key": "resolved_within_3_days_percentage", "label": "% resolved within 3 days (SLA compliance)", "format": "percent", "target": ">=70%"},
-            {"key": "resolution_sla_breached_count", "label": "# of SLA breached tickets (resolution, HubSpot native)", "format": "number", "target": "-", "note": _RESOLUTION_SLA_NOTE},
-            {"key": "resolution_sla_on_time_percentage", "label": "% SLA on-time (resolution, HubSpot native)", "format": "percent", "target": "-", "note": _RESOLUTION_SLA_NOTE},
-            {"key": "resolution_sla_breached_percentage", "label": "% SLA breached (resolution, HubSpot native)", "format": "percent", "target": "<=20%", "note": _RESOLUTION_SLA_NOTE},
+            {
+                "key": "mttr_hours",
+                "label": "MTTR (avg resolution time, hrs)",
+                "format": "hours",
+                "target": "<=72 Hrs",
+            },
+            {
+                "key": "mttr_days",
+                "label": "MTTR (avg resolution time, days)",
+                "format": "days",
+                "target": "<=3 Days",
+            },
+            {
+                "key": "median_resolution_hours",
+                "label": "Median resolution (hrs)",
+                "format": "hours",
+                "target": "6 Hrs",
+            },
+            {
+                "key": "median_resolution_days",
+                "label": "Median resolution (days)",
+                "format": "days",
+                "target": "0.25 Days",
+            },
+            {
+                "key": "resolved_within_3_days_percentage",
+                "label": "% resolved within 3 days (SLA compliance)",
+                "format": "percent",
+                "target": ">=70%",
+            },
+            {
+                "key": "resolution_sla_breached_count",
+                "label": "# of SLA breached tickets (resolution, HubSpot native)",
+                "format": "number",
+                "target": "-",
+                "note": _RESOLUTION_SLA_NOTE,
+            },
+            {
+                "key": "resolution_sla_on_time_percentage",
+                "label": "% SLA on-time (resolution, HubSpot native)",
+                "format": "percent",
+                "target": "-",
+                "note": _RESOLUTION_SLA_NOTE,
+            },
+            {
+                "key": "resolution_sla_breached_percentage",
+                "label": "% SLA breached (resolution, HubSpot native)",
+                "format": "percent",
+                "target": "<=20%",
+                "note": _RESOLUTION_SLA_NOTE,
+            },
         ],
     },
     {
         "key": "ownership",
         "label": "Resolution Ownership by Team",
         "metrics": [
-            {"key": "resolved_by_support_count", "label": "# resolved by Support", "format": "number", "target": "-"},
-            {"key": "resolved_by_automation_count", "label": "# resolved by Automation", "format": "number", "target": "-"},
-            {"key": "resolved_by_engineering_count", "label": "# resolved by Engineering", "format": "number", "target": "-"},
-            {"key": "resolved_by_backline_count", "label": "# resolved by Backline Engineering", "format": "number", "target": "-"},
-            {"key": "resolved_by_support_automation_percentage", "label": "% resolved by Support + Automation", "format": "percent", "target": ">=70%"},
-            {"key": "resolved_by_engineering_percentage", "label": "% resolved by Engineering (escalation rate)", "format": "percent", "target": "<=5%"},
-            {"key": "resolved_by_backline_percentage", "label": "% resolved by Backline Engineering", "format": "percent", "target": "-"},
+            {
+                "key": "resolved_by_support_count",
+                "label": "# resolved by Support",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "resolved_by_automation_count",
+                "label": "# resolved by Automation",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "resolved_by_engineering_count",
+                "label": "# resolved by Engineering",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "resolved_by_backline_count",
+                "label": "# resolved by Backline Engineering",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "resolved_by_support_automation_percentage",
+                "label": "% resolved by Support + Automation",
+                "format": "percent",
+                "target": ">=70%",
+            },
+            {
+                "key": "resolved_by_engineering_percentage",
+                "label": "% resolved by Engineering (escalation rate)",
+                "format": "percent",
+                "target": "<=5%",
+            },
+            {
+                "key": "resolved_by_backline_percentage",
+                "label": "% resolved by Backline Engineering",
+                "format": "percent",
+                "target": "-",
+            },
         ],
     },
     {
         "key": "csat",
         "label": "CSAT",
         "metrics": [
-            {"key": "csat_overall_unhappy_count", "label": "Overall: # rated Unhappy (0)", "format": "number", "target": "-"},
-            {"key": "csat_overall_neutral_count", "label": "Overall: # rated Neutral (1)", "format": "number", "target": "-"},
-            {"key": "csat_overall_happy_count", "label": "Overall: # rated Happy (2)", "format": "number", "target": "-"},
-            {"key": "csat_overall_normalized_percentage", "label": "Overall normalized CSAT %", "format": "percent", "target": ">=60%"},
-            {"key": "csat_raised_unhappy_count", "label": "Raised tickets: # rated Unhappy (0)", "format": "number", "target": "-"},
-            {"key": "csat_raised_neutral_count", "label": "Raised tickets: # rated Neutral (1)", "format": "number", "target": "-"},
-            {"key": "csat_raised_happy_count", "label": "Raised tickets: # rated Happy (2)", "format": "number", "target": "-"},
-            {"key": "csat_raised_normalized_percentage", "label": "Raised tickets normalized CSAT %", "format": "percent", "target": ">=60%"},
+            {
+                "key": "csat_overall_unhappy_count",
+                "label": "Overall: # rated Unhappy (0)",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "csat_overall_neutral_count",
+                "label": "Overall: # rated Neutral (1)",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "csat_overall_happy_count",
+                "label": "Overall: # rated Happy (2)",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "csat_overall_normalized_percentage",
+                "label": "Overall normalized CSAT %",
+                "format": "percent",
+                "target": ">=60%",
+            },
+            {
+                "key": "csat_raised_unhappy_count",
+                "label": "Raised tickets: # rated Unhappy (0)",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "csat_raised_neutral_count",
+                "label": "Raised tickets: # rated Neutral (1)",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "csat_raised_happy_count",
+                "label": "Raised tickets: # rated Happy (2)",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "csat_raised_normalized_percentage",
+                "label": "Raised tickets normalized CSAT %",
+                "format": "percent",
+                "target": ">=60%",
+            },
         ],
     },
     {
         "key": "nps",
         "label": "NPS",
         "metrics": [
-            {"key": "nps_promoter_count", "label": "# of Promoters", "format": "number", "target": "-"},
-            {"key": "nps_passive_count", "label": "# of Passives", "format": "number", "target": "-"},
-            {"key": "nps_detractor_count", "label": "# of Detractors", "format": "number", "target": "-"},
-            {"key": "nps_promoter_percentage", "label": "% Promoters", "format": "percent", "target": "-"},
-            {"key": "nps_detractor_percentage", "label": "% Detractors", "format": "percent", "target": "-"},
-            {"key": "nps_score", "label": "NPS score (Promoters - Detractors)", "format": "number", "target": "40"},
-            {"key": "nps_mean_score", "label": "NPS mean score (out of 10)", "format": "score", "target": "8.2"},
+            {
+                "key": "nps_promoter_count",
+                "label": "# of Promoters",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "nps_passive_count",
+                "label": "# of Passives",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "nps_detractor_count",
+                "label": "# of Detractors",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "nps_promoter_percentage",
+                "label": "% Promoters",
+                "format": "percent",
+                "target": "-",
+            },
+            {
+                "key": "nps_detractor_percentage",
+                "label": "% Detractors",
+                "format": "percent",
+                "target": "-",
+            },
+            {
+                "key": "nps_score",
+                "label": "NPS score (Promoters - Detractors)",
+                "format": "number",
+                "target": "40",
+            },
+            {
+                "key": "nps_mean_score",
+                "label": "NPS mean score (out of 10)",
+                "format": "score",
+                "target": "8.2",
+            },
         ],
     },
     {
         "key": "ttr_by_team",
         "label": "TTR by Resolving Team",
         "metrics": [
-            {"key": "engineering_resolved_within_3_days_count", "label": "Engineering: # resolved <3 days", "format": "number", "target": "-"},
-            {"key": "engineering_resolved_within_3_days_percentage", "label": "Engineering: % resolved <3 days", "format": "percent", "target": ">=80%"},
-            {"key": "engineering_mttr_hours", "label": "Engineering: MTTR (hrs)", "format": "hours", "target": "<=72 Hrs"},
-            {"key": "engineering_mttr_days", "label": "Engineering: MTTR (days)", "format": "days", "target": "<=3 Days"},
-            {"key": "backline_resolved_within_3_days_count", "label": "Backline: # resolved <3 days", "format": "number", "target": "-"},
-            {"key": "backline_resolved_within_3_days_percentage", "label": "Backline: % resolved <3 days", "format": "percent", "target": ">=80%"},
-            {"key": "backline_mttr_hours", "label": "Backline: MTTR (hrs)", "format": "hours", "target": "<=72 Hrs"},
-            {"key": "backline_mttr_days", "label": "Backline: MTTR (days)", "format": "days", "target": "<=3 Days"},
+            {
+                "key": "engineering_resolved_within_3_days_count",
+                "label": "Engineering: # resolved <3 days",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "engineering_resolved_within_3_days_percentage",
+                "label": "Engineering: % resolved <3 days",
+                "format": "percent",
+                "target": ">=80%",
+            },
+            {
+                "key": "engineering_mttr_hours",
+                "label": "Engineering: MTTR (hrs)",
+                "format": "hours",
+                "target": "<=72 Hrs",
+            },
+            {
+                "key": "engineering_mttr_days",
+                "label": "Engineering: MTTR (days)",
+                "format": "days",
+                "target": "<=3 Days",
+            },
+            {
+                "key": "backline_resolved_within_3_days_count",
+                "label": "Backline: # resolved <3 days",
+                "format": "number",
+                "target": "-",
+            },
+            {
+                "key": "backline_resolved_within_3_days_percentage",
+                "label": "Backline: % resolved <3 days",
+                "format": "percent",
+                "target": ">=80%",
+            },
+            {
+                "key": "backline_mttr_hours",
+                "label": "Backline: MTTR (hrs)",
+                "format": "hours",
+                "target": "<=72 Hrs",
+            },
+            {
+                "key": "backline_mttr_days",
+                "label": "Backline: MTTR (days)",
+                "format": "days",
+                "target": "<=3 Days",
+            },
         ],
     },
 ]
@@ -458,7 +777,9 @@ async def add_dashboard_link(session: AsyncSession, name: str, url: str) -> dict
     return _link_dict(link)
 
 
-async def update_dashboard_link(session: AsyncSession, link_id: int, name: str, url: str) -> dict | None:
+async def update_dashboard_link(
+    session: AsyncSession, link_id: int, name: str, url: str
+) -> dict | None:
     link = await session.get(DashboardLink, link_id)
     if link is None:
         return None

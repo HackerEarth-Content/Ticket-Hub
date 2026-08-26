@@ -8,13 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session
 from core.users import current_active_user, current_active_user_optional
-from dashboard import backline, customers, events, export, frontline, frontline_metric_dashboard, slack_issues, utils
+from dashboard import (
+    backline,
+    customers,
+    events,
+    export,
+    frontline,
+    frontline_metric_dashboard,
+    slack_issues,
+    utils,
+)
 from hubspot_pipeline import pipeline as sync_pipeline
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-PeriodParam = Query("week", pattern=r"^(today|yesterday|week|month|custom:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2})$")
+PeriodParam = Query(
+    "week",
+    pattern=r"^(today|yesterday|week|month|custom:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2})$",
+)
 
 
 @router.get("/live/today")
@@ -23,7 +35,9 @@ async def live_today(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/summary")
-async def summary(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def summary(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await utils.get_summary(session, period)
 
 
@@ -53,7 +67,9 @@ async def distribution_module_tickets(
 
 
 @router.get("/distribution/source")
-async def distribution_source(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def distribution_source(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await utils.get_source_distribution(session, period)
 
 
@@ -88,17 +104,23 @@ async def distribution_stage(
 
 
 @router.get("/kpis/mttr")
-async def kpis_mttr(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def kpis_mttr(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await utils.get_median_resolution_time_by_priority(session, period)
 
 
 @router.get("/kpis/sla")
-async def kpis_sla(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def kpis_sla(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await utils.get_sla_kpis(session, period)
 
 
 @router.get("/kpis/csat")
-async def kpis_csat(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def kpis_csat(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await utils.get_csat(session, period)
 
 
@@ -112,7 +134,9 @@ async def quality_unmatched_csat(
 
 
 @router.get("/kpis/nps")
-async def kpis_nps(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def kpis_nps(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await utils.get_nps(session, period)
 
 
@@ -133,7 +157,9 @@ async def kpis_data_quality(
 
 
 @router.get("/backline/overview")
-async def backline_overview(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def backline_overview(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await backline.get_backline_overview(session, period)
 
 
@@ -177,7 +203,9 @@ async def frontline_frt(
 
 
 @router.get("/frontline/fcr")
-async def frontline_fcr(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def frontline_fcr(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await frontline.get_frontline_fcr(session, period)
 
 
@@ -223,7 +251,9 @@ async def update_frontline_metric_dashboard_link(
     session: AsyncSession = Depends(get_session),
     user=Depends(current_active_user),
 ):
-    updated = await frontline_metric_dashboard.update_dashboard_link(session, link_id, name, url)
+    updated = await frontline_metric_dashboard.update_dashboard_link(
+        session, link_id, name, url
+    )
     if updated is None:
         raise HTTPException(status_code=404, detail="Link not found")
     return updated
@@ -248,7 +278,9 @@ async def frontline_metric_dashboard_export():
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="frontline-metric-dashboard.xlsx"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="frontline-metric-dashboard.xlsx"'
+        },
     )
 
 
@@ -271,7 +303,9 @@ async def quality_uncategorized(
 
 
 @router.get("/customers/volume")
-async def customers_volume(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def customers_volume(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await customers.get_customer_ticket_volume(session, period)
 
 
@@ -289,12 +323,16 @@ async def event_names(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/events/volume")
-async def events_volume(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def events_volume(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await events.get_event_ticket_volume(session, period)
 
 
 @router.get("/events/export/tickets")
-async def events_export_tickets(event_name: str, session: AsyncSession = Depends(get_session)):
+async def events_export_tickets(
+    event_name: str, session: AsyncSession = Depends(get_session)
+):
     """Ticket-level Excel for one event, all-time (see build_event_ticket_detail_workbook)."""
     content = await export.build_event_ticket_detail_workbook(session, event_name)
     safe_name = "".join(c if c.isalnum() else "_" for c in event_name)
@@ -314,7 +352,9 @@ async def customers_export_tickets(
 ):
     """Ticket-level Excel for one customer -- shares /customers/export's
     (open) gating, same tab."""
-    content = await export.build_customer_ticket_detail_workbook(session, customer_name, period)
+    content = await export.build_customer_ticket_detail_workbook(
+        session, customer_name, period
+    )
     safe_name = "".join(c if c.isalnum() else "_" for c in customer_name)
     filename = f"customer-tickets-{safe_name}-{period.replace(':', '_')}.xlsx"
     return Response(
@@ -336,12 +376,16 @@ async def customers_export_by_list(
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="customer-list-report.xlsx"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="customer-list-report.xlsx"'
+        },
     )
 
 
 @router.get("/customers/export")
-async def customers_export(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def customers_export(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     """Excel of per-customer issue counts -- same aggregate the Customers tab
     shows, so it shares that tab's (open) gating rather than /export's."""
     content = await export.build_customer_counts_workbook(session, period)
@@ -354,17 +398,23 @@ async def customers_export(period: str = PeriodParam, session: AsyncSession = De
 
 
 @router.get("/customers/status")
-async def customers_status(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def customers_status(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await customers.get_customer_status_breakdown(session, period)
 
 
 @router.get("/customers/details")
-async def customers_details(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def customers_details(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await customers.get_customer_details(session, period)
 
 
 @router.get("/nps/export")
-async def nps_export(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def nps_export(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     """Excel of NPS responses -- shown on the (open) overview tab, so it
     shares that tab's gating rather than /export's."""
     content = await export.build_nps_workbook(session, period)
@@ -377,7 +427,9 @@ async def nps_export(period: str = PeriodParam, session: AsyncSession = Depends(
 
 
 @router.get("/slack/issues")
-async def slack_issues_route(period: str = PeriodParam, session: AsyncSession = Depends(get_session)):
+async def slack_issues_route(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
     return await slack_issues.get_slack_issues(session, period)
 
 

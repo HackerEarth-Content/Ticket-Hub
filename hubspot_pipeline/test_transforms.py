@@ -14,7 +14,9 @@ from hubspot_pipeline.status_map import resolve_status
 
 def test_split_categories():
     assert split_categories("Test Access;Proctoring B2C;Result enquiry") == [
-        "Test Access", "Proctoring B2C", "Result enquiry",
+        "Test Access",
+        "Proctoring B2C",
+        "Result enquiry",
     ]
     assert split_categories("Campatibility") == ["Compatibility"]  # typo fixed
     assert split_categories(None) == []
@@ -34,7 +36,7 @@ def test_resolve_module():
 
 def test_resolve_status():
     assert resolve_status("0", "54413370") == "Resolved"  # Support / Closed
-    assert resolve_status("0", "54370401") == "New"        # Support / New
+    assert resolve_status("0", "54370401") == "New"  # Support / New
     assert resolve_status("0", "nonexistent-stage") == "Unknown"
     assert resolve_status("nonexistent-pipeline", "1") == "Unknown"
 
@@ -43,14 +45,22 @@ def test_derive_priority():
     # Real priority is never overwritten.
     assert derive_priority("HIGH", "anything", [], "Open") == ("HIGH", False)
     # Subject keyword wins first.
-    assert derive_priority(None, "[URGENT] site is down", [], "Open") == ("URGENT", True)
+    assert derive_priority(None, "[URGENT] site is down", [], "Open") == (
+        "URGENT",
+        True,
+    )
     assert derive_priority(None, "Production is DOWN", [], "Open") == ("HIGH", True)
     # Category-based default.
     assert derive_priority(None, "hello", ["Webcam"], "Open") == ("HIGH", True)
     assert derive_priority(None, "hello", ["Spam"], "Open") == ("LOW", True)
     # Bug-pending stage floors LOW/None up to MEDIUM but doesn't downgrade HIGH.
-    assert derive_priority(None, "hello", ["Spam"], "Bugs pending on Backline/AE") == ("MEDIUM", True)
-    assert derive_priority(None, "hello", ["Webcam"], "Bugs pending on Backline/AE") == ("HIGH", True)
+    assert derive_priority(None, "hello", ["Spam"], "Bugs pending on Backline/AE") == (
+        "MEDIUM",
+        True,
+    )
+    assert derive_priority(
+        None, "hello", ["Webcam"], "Bugs pending on Backline/AE"
+    ) == ("HIGH", True)
     # Fallback.
     assert derive_priority(None, "hello", [], "Open") == ("MEDIUM", True)
 
@@ -66,14 +76,20 @@ def test_resolve_resolution_bucket():
 
 
 def test_is_actionable():
-    assert is_actionable(None) is True          # not yet resolved -- still actionable
+    assert is_actionable(None) is True  # not yet resolved -- still actionable
     assert is_actionable("Issue Resolved") is True
     assert is_actionable("No Action Taken") is False
 
 
 def test_resolve_backline_path():
-    assert resolve_backline_path({"backline_ae": {"entered_at": "2026-01-01T00:00:00Z"}}) == "Bug Bounty"
-    assert resolve_backline_path({"be_ae": {"entered_at": "2026-01-01T00:00:00Z"}}) == "Frontline Escalation"
+    assert (
+        resolve_backline_path({"backline_ae": {"entered_at": "2026-01-01T00:00:00Z"}})
+        == "Bug Bounty"
+    )
+    assert (
+        resolve_backline_path({"be_ae": {"entered_at": "2026-01-01T00:00:00Z"}})
+        == "Frontline Escalation"
+    )
     assert resolve_backline_path({}) is None
     assert resolve_backline_path({"backline_ae": {"entered_at": None}}) is None
 
@@ -102,10 +118,22 @@ def test_sla_met():
 
 def test_resolve_customer_name():
     # "Others" dropdown value -> falls through to the free-text field.
-    assert resolve_customer_name({"blackops_account_name": "Others", "other_blackops_account_name": "Photon"}) == "Photon"
-    assert resolve_customer_name({"blackops_account_name": "others"}) is None  # no fallback available
+    assert (
+        resolve_customer_name(
+            {"blackops_account_name": "Others", "other_blackops_account_name": "Photon"}
+        )
+        == "Photon"
+    )
+    assert (
+        resolve_customer_name({"blackops_account_name": "others"}) is None
+    )  # no fallback available
     # Real dropdown value wins outright.
-    assert resolve_customer_name({"blackops_account_name": "Nokia", "other_blackops_account_name": "Ignored"}) == "Nokia"
+    assert (
+        resolve_customer_name(
+            {"blackops_account_name": "Nokia", "other_blackops_account_name": "Ignored"}
+        )
+        == "Nokia"
+    )
     # hs_primary_company_name only used when both blackops fields are empty.
     assert resolve_customer_name({"hs_primary_company_name": "Acme"}) == "Acme"
     # HackerEarth's own CRM association never counts as a customer.
@@ -120,7 +148,11 @@ def test_match_ticket():
         "t2": (submitted_at - timedelta(hours=2), "owner2", "Bob"),  # closest
         "t3": (None, "owner3", "Carol"),  # no closed_at -- never picked
     }
-    assert _match_ticket(submitted_at, ["t1", "t2", "t3"], ticket_info) == ("t2", "owner2", "Bob")
+    assert _match_ticket(submitted_at, ["t1", "t2", "t3"], ticket_info) == (
+        "t2",
+        "owner2",
+        "Bob",
+    )
     # No candidates at all -- unmatched.
     assert _match_ticket(submitted_at, [], ticket_info) == (None, None, None)
     # Only a no-closed_at candidate -- still unmatched.
@@ -128,7 +160,12 @@ def test_match_ticket():
 
 
 def test_extract_channel():
-    assert _extract_channel("Workflow: engg oncall\nChannel: #engg-assessment\nReported By: A") == "engg-assessment"
+    assert (
+        _extract_channel(
+            "Workflow: engg oncall\nChannel: #engg-assessment\nReported By: A"
+        )
+        == "engg-assessment"
+    )
     assert _extract_channel("channel: Content-Programs ") == "content-programs"
     assert _extract_channel("Reported By: A") is None  # no Channel line
     assert _extract_channel("Channel:") is None  # empty value

@@ -17,22 +17,17 @@ from fastapi_users.db import SQLAlchemyBaseUserTable, SQLAlchemyBaseOAuthAccount
 
 from sqlalchemy import (
     TIMESTAMP,
-    BigInteger,
     ForeignKey,
-    Index,
-    Integer,
     Text,
     text,
 )
 
 from sqlalchemy.orm import (
-    Mapped,
-    declarative_base,
-    mapped_column,
     relationship,
     synonym,
     declared_attr,
 )
+
 
 class Base(DeclarativeBase):
     pass
@@ -160,7 +155,9 @@ class DashboardLink(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
     url: Mapped[str]
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
 
 
 class OAuthAccount(SQLAlchemyBaseOAuthAccountTable[str], Base):
@@ -176,7 +173,6 @@ class OAuthAccount(SQLAlchemyBaseOAuthAccountTable[str], Base):
         return mapped_column(
             Text, ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False
         )
-
 
 
 class User(SQLAlchemyBaseUserTable[str], Base):

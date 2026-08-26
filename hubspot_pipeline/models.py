@@ -126,7 +126,9 @@ class DashboardTicket(BaseModel):
     categories: list[str]
     primary_category: str | None
     module: str
-    hubspot_module: str | None  # HubSpot's own "module" dropdown -- see client.py's comment
+    hubspot_module: (
+        str | None
+    )  # HubSpot's own "module" dropdown -- see client.py's comment
     sub_category: str | None
     customer_name: str | None
     # event_name is a single-select dropdown with an "others" catch-all
@@ -137,7 +139,7 @@ class DashboardTicket(BaseModel):
     event_name: str | None
     other_event_name: str | None
 
-    priority: str | None          # real hs_ticket_priority, None if blank
+    priority: str | None  # real hs_ticket_priority, None if blank
     derived_priority: str
     priority_inferred: bool
 
@@ -145,13 +147,17 @@ class DashboardTicket(BaseModel):
     owner_name: str | None
     owner_assigned_at: str | None  # hubspot_owner_assigneddate, ISO string
     source_type: str | None
-    record_source: str | None  # hs_object_source -- e.g. CRM_UI/CONVERSATIONS/IMPORT/BOT
-    reporter_contact_name: str | None  # parsed from ticket content, see _extract_reported_by
+    record_source: (
+        str | None
+    )  # hs_object_source -- e.g. CRM_UI/CONVERSATIONS/IMPORT/BOT
+    reporter_contact_name: (
+        str | None
+    )  # parsed from ticket content, see _extract_reported_by
     slack_workflow: str | None  # parsed from ticket content, see _extract_workflow
     slack_channel: str | None  # parsed from ticket content, see _extract_channel
 
-    created_at: str | None        # createdate, ISO string
-    closed_at: str | None         # closed_date, ISO string
+    created_at: str | None  # createdate, ISO string
+    closed_at: str | None  # closed_date, ISO string
     last_modified_at: str | None  # hs_lastmodifieddate, ISO string
 
     sla_first_response_status: str | None
@@ -191,7 +197,9 @@ class DashboardTicket(BaseModel):
         categories = split_categories(props.get("hs_ticket_category"))
         subject = _unescape(props.get("subject")) or ""
         raw_priority = props.get("hs_ticket_priority") or None
-        derived, inferred = derive_priority(raw_priority, subject, categories, stage_label)
+        derived, inferred = derive_priority(
+            raw_priority, subject, categories, stage_label
+        )
 
         final_resolution = props.get("final_resolution") or None
         source_type = props.get("source_type") or None
@@ -199,8 +207,10 @@ class DashboardTicket(BaseModel):
 
         stage_timings = {
             stage_key: {
-                "entered_at": props.get(f"hs_v2_date_entered_{stage['stage_id']}") or None,
-                "exited_at": props.get(f"hs_v2_date_exited_{stage['stage_id']}") or None,
+                "entered_at": props.get(f"hs_v2_date_entered_{stage['stage_id']}")
+                or None,
+                "exited_at": props.get(f"hs_v2_date_exited_{stage['stage_id']}")
+                or None,
                 "cumulative_hours": _ms_to_hours(
                     props.get(f"hs_v2_cumulative_time_in_{stage['stage_id']}")
                 ),
@@ -242,10 +252,14 @@ class DashboardTicket(BaseModel):
                 else None
             ),
             slack_workflow=(
-                _extract_workflow(props.get("content")) if source_type == "Slack" else None
+                _extract_workflow(props.get("content"))
+                if source_type == "Slack"
+                else None
             ),
             slack_channel=(
-                _extract_channel(props.get("content")) if source_type == "Slack" else None
+                _extract_channel(props.get("content"))
+                if source_type == "Slack"
+                else None
             ),
             created_at=props.get("createdate"),
             closed_at=props.get("closed_date"),

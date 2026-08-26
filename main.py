@@ -1,5 +1,4 @@
-"""FastAPI entry point for the helpdesk dashboard API.
-"""
+"""FastAPI entry point for the helpdesk dashboard API."""
 
 from __future__ import annotations
 
@@ -22,8 +21,6 @@ from api.auth_routes import router as auth_router
 from models.users import UserRead, UserUpdate
 
 
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db_manager.initialize()
@@ -31,6 +28,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown(wait=False)
     await db_manager.close()
+
 
 app = FastAPI(
     title="HE Helpdesk Dashboard API",
@@ -50,11 +48,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # A user who isn't on ALLOWED_EMAILS reaches this mid-OAuth-flow -- send them
 # back to the frontend (not a bare JSON error) with a flag it can pop up.
 @app.exception_handler(OAuthNotAllowedError)
 async def oauth_not_allowed_handler(request: Request, exc: OAuthNotAllowedError):
-    return RedirectResponse(f"{settings.FRONTEND_URL}?authError=not_allowed", status_code=302)
+    return RedirectResponse(
+        f"{settings.FRONTEND_URL}?authError=not_allowed", status_code=302
+    )
+
 
 # Include API routers
 app.include_router(auth_router, prefix="/api")
