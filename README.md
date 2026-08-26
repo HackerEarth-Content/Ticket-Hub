@@ -72,6 +72,8 @@ navigation, curl, or same-origin requests to public routes. Check
 
 ```bash
 uv sync
+uv run pre-commit install
+
 ```
 
 This creates `.venv/` and installs everything pinned in `uv.lock`.
