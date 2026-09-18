@@ -76,6 +76,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --accent-blue: #3987e5;
   --accent-indigo: #9085e9;
   --accent-orange: #d95926;
@@ -101,6 +102,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --accent-blue: #0939e6;
   --accent-indigo: #5f59ff;
   --accent-orange: #ff5722;

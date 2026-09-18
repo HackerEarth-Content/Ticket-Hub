@@ -138,6 +138,7 @@ export function Header({
                 min={EARLIEST_DATA_DATE}
                 max={draftEnd || todayIstDate()}
                 onChange={(e) => setDraftStart(e.target.value)}
+                onKeyDown={(e) => e.preventDefault()}
                 aria-label="Range start date"
               />
               <span>to</span>
@@ -147,6 +148,7 @@ export function Header({
                 min={draftStart || EARLIEST_DATA_DATE}
                 max={todayIstDate()}
                 onChange={(e) => setDraftEnd(e.target.value)}
+                onKeyDown={(e) => e.preventDefault()}
                 aria-label="Range end date"
               />
               <button
