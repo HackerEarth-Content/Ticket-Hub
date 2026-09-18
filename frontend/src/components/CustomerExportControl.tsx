@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { Period } from "../types";
 
@@ -35,6 +35,13 @@ export function CustomerExportControl({ period }: Props) {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [nameListText, setNameListText] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
+
+  const customerMatches = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return customerNames;
+    return customerNames.filter((n) => n.toLowerCase().includes(q));
+  }, [customerQuery, customerNames]);
 
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -44,6 +51,8 @@ export function CustomerExportControl({ period }: Props) {
         setMenuOpen(false);
         setByCustomer(false);
         setByList(false);
+        setSelectedCustomer("");
+        setCustomerQuery("");
       }
     }
     document.addEventListener("mousedown", onClickOutside);
@@ -72,7 +81,7 @@ export function CustomerExportControl({ period }: Props) {
   }
 
   async function downloadByCustomer() {
-    if (!selectedCustomer) return;
+    if (!selectedCustomer || !customerNames.includes(selectedCustomer)) return;
     setExporting(true);
     try {
       const blob = await api.exportCustomerTickets(period, selectedCustomer);
@@ -109,7 +118,7 @@ export function CustomerExportControl({ period }: Props) {
         onClick={() => setMenuOpen((o) => !o)}
         aria-expanded={menuOpen}
       >
-        {exporting ? "⏳ Exporting…" : "⬇️ Download Excel"}
+        {exporting ? "⏳ Exporting…" : "⬇️ Filter & Download Data"}
       </button>
       {menuOpen && (
         <div className="auth-menu">
@@ -128,28 +137,53 @@ export function CustomerExportControl({ period }: Props) {
           ) : byCustomer ? (
             <>
               <div className="auth-menu-name">Tickets by customer</div>
-              <select
+              <input
                 className="select"
-                value={selectedCustomer}
-                onChange={(e) => setSelectedCustomer(e.target.value)}
+                value={customerQuery}
+                onChange={(e) => {
+                  setCustomerQuery(e.target.value);
+                  setSelectedCustomer("");
+                }}
                 disabled={exporting || loadingNames}
+                placeholder={loadingNames ? "Loading companies…" : "Search company…"}
                 style={{ margin: "0 8px 6px", width: "calc(100% - 16px)" }}
-              >
-                <option value="">{loadingNames ? "Loading companies…" : "Select a company"}</option>
-                {customerNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+              />
+              {!selectedCustomer && !loadingNames && (
+                <div style={{ margin: "0 8px 6px", maxHeight: 220, overflowY: "auto" }}>
+                  {customerMatches.length === 0 ? (
+                    <div className="auth-menu-name">No matches</div>
+                  ) : (
+                    customerMatches.map((name) => (
+                      <button
+                        key={name}
+                        className="auth-menu-item"
+                        onClick={() => {
+                          setSelectedCustomer(name);
+                          setCustomerQuery(name);
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
               <button
                 className="auth-menu-item"
-                disabled={exporting || !selectedCustomer}
+                disabled={exporting || !customerNames.includes(selectedCustomer)}
                 onClick={downloadByCustomer}
               >
                 {exporting ? "⏳ Exporting…" : "⬇️ Download"}
               </button>
-              <button className="auth-menu-item" disabled={exporting} onClick={() => setByCustomer(false)}>
+              <button
+                className="auth-menu-item"
+                disabled={exporting}
+                onClick={() => {
+                  setByCustomer(false);
+                  setSelectedCustomer("");
+                  setCustomerQuery("");
+                }}
+              >
                 ← Back
               </button>
             </>
