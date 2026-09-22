@@ -4,7 +4,7 @@ this module only declares the mapped classes, it never creates or alters tables.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 from uuid import uuid4
 
@@ -18,6 +18,7 @@ from fastapi_users.db import SQLAlchemyBaseUserTable, SQLAlchemyBaseOAuthAccount
 from sqlalchemy import (
     TIMESTAMP,
     ForeignKey,
+    Time,
     Text,
     text,
 )
@@ -158,6 +159,46 @@ class DashboardLink(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
     )
+
+
+class FrontlineAgent(Base):
+    """A support agent shown on the "Frontline Agents" shift roster --
+    editable in place (add/remove/edit), same as DashboardLink. The roster
+    is the single source of truth for who's on shift: the live-status strip
+    derives "who's active now" from this table + AgentShift rather than
+    keeping a separate status flag that could drift out of sync."""
+
+    __tablename__ = "frontline_agents"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str]
+    email: Mapped[str]
+    slack_id: Mapped[str | None]
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+
+
+class AgentShift(Base):
+    """One day's shift for one agent (7 rows/agent, one per day_of_week).
+    start_time/end_time are IST wall-clock times (Asia/Kolkata, same
+    convention as dashboard.utils._IST) -- end_time < start_time means the
+    shift crosses midnight (e.g. 16:00-01:00)."""
+
+    __tablename__ = "agent_shifts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(
+        ForeignKey("frontline_agents.id", ondelete="CASCADE")
+    )
+    day_of_week: Mapped[int]  # 0=Monday .. 6=Sunday
+    is_week_off: Mapped[bool] = mapped_column(default=False)
+    # A holiday (e.g. a public holiday) is off-shift like a week-off, but
+    # tracked separately so the roster can tell "doesn't normally work this
+    # day" apart from "would normally work, but not this particular day".
+    is_holiday: Mapped[bool] = mapped_column(default=False)
+    start_time: Mapped[time | None] = mapped_column(Time)
+    end_time: Mapped[time | None] = mapped_column(Time)
 
 
 class OAuthAccount(SQLAlchemyBaseOAuthAccountTable[str], Base):

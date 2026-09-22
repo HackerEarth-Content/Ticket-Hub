@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import "./theme.css";
 import "./App.css";
+import { ActiveAgentsStrip } from "./components/ActiveAgentsStrip";
+import { FrontlineAgentsCard } from "./components/FrontlineAgentsCard";
 import { Header } from "./components/Header";
 import { LiveStatusStrip } from "./components/LiveStatusStrip";
 import { SummaryCard } from "./components/SummaryCard";
@@ -42,6 +44,8 @@ import { TabNav, type DashboardTab } from "./components/TabNav";
 import { api } from "./api";
 import { useAuth } from "./hooks/useAuth";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { useFrontlineAgents } from "./hooks/useFrontlineAgents";
+import { useOnShiftNow } from "./hooks/useOnShiftNow";
 import { useFrontlineMetricDashboard } from "./hooks/useFrontlineMetricDashboard";
 import { useLiveStatus } from "./hooks/useLiveStatus";
 import { useTheme } from "./hooks/useTheme";
@@ -61,12 +65,14 @@ export default function App() {
   const { live, sync, loading: liveLoading, syncing, syncError, syncNow } = useLiveStatus();
   const { data: frontlineMetricDashboard, loading: frontlineMetricDashboardLoading } =
     useFrontlineMetricDashboard(!!user, refreshTick);
+  const { agents, loading: agentsLoading, refresh: refreshAgents } = useFrontlineAgents(!!user);
+  const { agents: onShiftAgents, loading: onShiftLoading } = useOnShiftNow();
 
   // The tab is auth-gated (TabNav drops it from the nav for signed-out
   // visitors) -- if a signed-in user is on it and then signs out, bounce
   // back to overview instead of leaving them on a now-inaccessible tab.
   useEffect(() => {
-    if (!user && tab === "frontline_metrics") setTab("overview");
+    if (!user && (tab === "frontline_metrics" || tab === "frontline_agents")) setTab("overview");
   }, [user, tab]);
 
   useEffect(() => {
@@ -173,6 +179,7 @@ export default function App() {
           </span>
         </div>
         <LiveStatusStrip live={live} loading={liveLoading} />
+        <ActiveAgentsStrip agents={onShiftAgents} loading={onShiftLoading} />
       </section>
 
       <TabNav active={tab} onChange={setTab} isLoggedIn={!!user} />
@@ -400,6 +407,13 @@ export default function App() {
           <div style={{ marginTop: 14 }}>
             <FrontlineLinksCard />
           </div>
+        </>
+      )}
+
+      {tab === "frontline_agents" && user && (
+        <>
+          <SectionHeading title="Frontline Agents" color="var(--accent-aqua)" />
+          <FrontlineAgentsCard agents={agents} loading={agentsLoading} onChanged={refreshAgents} />
         </>
       )}
 

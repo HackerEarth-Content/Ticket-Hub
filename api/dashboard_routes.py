@@ -14,6 +14,7 @@ from dashboard import (
     events,
     export,
     frontline,
+    frontline_agents,
     frontline_metric_dashboard,
     slack_issues,
     utils,
@@ -267,6 +268,77 @@ async def delete_frontline_metric_dashboard_link(
 ):
     await frontline_metric_dashboard.delete_dashboard_link(session, link_id)
     return {"ok": True}
+
+
+@router.get("/frontline/agents")
+async def frontline_agents_list(
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    """The full roster -- every agent's email, Slack ID and full week
+    schedule. Stays behind login (powers the Frontline Agents tab only);
+    see frontline_agents_on_shift below for the public "who's on shift"
+    strip, which exposes far less."""
+    return await frontline_agents.list_agents(session)
+
+
+@router.get("/frontline/on-shift")
+async def frontline_agents_on_shift(session: AsyncSession = Depends(get_session)):
+    """Public, unlike frontline_agents_list above -- computed server-side so
+    it only ever returns the name/email/slack_id of agents on shift *right
+    now*, never a full schedule or an off-shift agent's contact info."""
+    return await frontline_agents.list_on_shift_now(session)
+
+
+@router.post("/frontline/agents")
+async def frontline_agents_create(
+    name: str = Body(...),
+    email: str = Body(...),
+    slack_id: str | None = Body(None),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    return await frontline_agents.add_agent(session, name, email, slack_id)
+
+
+@router.put("/frontline/agents/{agent_id}")
+async def frontline_agents_update(
+    agent_id: int,
+    name: str = Body(...),
+    email: str = Body(...),
+    slack_id: str | None = Body(None),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    updated = await frontline_agents.update_agent(
+        session, agent_id, name, email, slack_id
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return updated
+
+
+@router.delete("/frontline/agents/{agent_id}")
+async def frontline_agents_delete(
+    agent_id: int,
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    await frontline_agents.delete_agent(session, agent_id)
+    return {"ok": True}
+
+
+@router.put("/frontline/agents/{agent_id}/shifts")
+async def frontline_agents_set_shifts(
+    agent_id: int,
+    shifts: list[dict] = Body(..., embed=True),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    updated = await frontline_agents.set_agent_shifts(session, agent_id, shifts)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return updated
 
 
 @router.get("/frontline/metric-dashboard/export")

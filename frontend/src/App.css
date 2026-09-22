@@ -376,6 +376,27 @@ h1 {
 .table-toggle:hover {
   text-decoration: underline;
 }
+.card-lg {
+  padding: 26px 28px 24px;
+}
+.card-lg .card-title {
+  font-size: 17px;
+}
+.card-lg .card-sub {
+  font-size: 12.5px;
+  margin-top: 3px;
+}
+.table-toggle-lg {
+  font-size: 13.5px;
+  background: color-mix(in srgb, var(--accent-aqua) 12%, transparent);
+  color: var(--accent-aqua);
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+.table-toggle-lg:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--accent-aqua) 20%, transparent);
+}
 
 /* ---- quick links card ---- */
 .fl-list {
@@ -455,6 +476,293 @@ h1 {
 .live-panel-sub {
   font-size: 11.5px;
   color: var(--ink-3);
+}
+
+/* ---- active agents row (inside .live-panel, below the stat strip) ---- */
+.active-agents-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  padding-bottom: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--accent-aqua) 20%, var(--line));
+}
+.active-agents-label {
+  font-size: 11.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.active-agents-empty {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.active-agents-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.active-agent-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 8px 8px 18px;
+}
+.active-agent-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+.active-agent-chip .icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+}
+
+/* ---- shift roster table ----
+   Bigger and clearly "bifurcated" than the generic .tbl-wrap table: a bold
+   grid of vertical + horizontal rules (not just row underlines) so every
+   day/agent cell reads as its own box, plus zebra striping and a
+   sticky/shaded day column as the fixed reference column. */
+.shift-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.shift-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+.shift-table th,
+.shift-table td {
+  white-space: nowrap;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.shift-table th:first-child,
+.shift-table td:first-child {
+  border-left: none;
+}
+.shift-table thead th {
+  background: var(--surface-2);
+  border-bottom: 2px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.shift-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+}
+.shift-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.shift-table td.name-cell {
+  background: var(--surface-2);
+  font-weight: 650;
+  font-size: 13.5px;
+}
+.agent-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.shift-pill,
+.weekoff-pill,
+.holiday-pill {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.shift-pill {
+  color: var(--accent-aqua);
+  background: color-mix(in srgb, var(--accent-aqua) 14%, transparent);
+}
+.weekoff-pill {
+  color: var(--ink-3);
+  background: var(--surface-2);
+}
+.holiday-pill {
+  color: var(--accent-yellow);
+  background: color-mix(in srgb, var(--accent-yellow) 16%, transparent);
+}
+.shift-cell-edit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.shift-day-type {
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.shift-cell-edit-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.shift-cell-edit-sep {
+  color: var(--ink-3);
+}
+.agent-info-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+.agent-info-edit .select {
+  width: 100%;
+}
+.agent-info-edit .fl-actions {
+  align-self: flex-end;
+}
+
+/* ---- time picker dial (Material-style clock) ---- */
+.time-picker-trigger {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  min-width: 88px;
+}
+.time-picker-trigger:hover {
+  border-color: var(--accent-aqua);
+}
+.time-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.time-picker-dialog {
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: var(--shadow-hover);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.time-picker-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.time-picker-display-part {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 650;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  border: none;
+  border-radius: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.time-picker-display-part.active {
+  color: #fff;
+  background: var(--accent-aqua);
+}
+.time-picker-colon {
+  font-size: 34px;
+  font-weight: 650;
+  color: var(--ink-3);
+}
+.time-picker-period {
+  display: flex;
+  flex-direction: column;
+  margin-left: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.time-picker-period button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-3);
+  background: var(--surface);
+  border: none;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.time-picker-period button.active {
+  color: #fff;
+  background: var(--accent-aqua);
+}
+.time-picker-dial {
+  position: relative;
+  width: 232px;
+  height: 232px;
+  touch-action: none;
+  user-select: none;
+}
+.time-picker-face {
+  fill: var(--surface-2);
+}
+.time-picker-hand {
+  stroke: var(--accent-aqua);
+  stroke-width: 2;
+}
+.time-picker-hub {
+  fill: var(--accent-aqua);
+}
+.time-picker-knob {
+  fill: var(--accent-aqua);
+}
+.time-picker-number {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  border-radius: 50%;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.time-picker-number.selected {
+  color: #fff;
+}
+.time-picker-actions {
+  display: flex;
+  gap: 16px;
+  align-self: flex-end;
+}
+.time-picker-ok {
+  color: var(--accent-aqua);
+  font-weight: 700;
 }
 
 /* ---- stat tiles ---- */

@@ -12,7 +12,9 @@ import type {
   DashboardLink,
   DataAnomalies,
   DataQuality,
+  AgentShift,
   EventVolume,
+  FrontlineAgent,
   FrontlineFcr,
   FrontlineFrt,
   FrontlineMetricDashboard,
@@ -21,6 +23,7 @@ import type {
   ModuleDistribution,
   ModuleTickets,
   Nps,
+  OnShiftAgent,
   Period,
   Pipelines,
   ResolutionByPriority,
@@ -130,6 +133,15 @@ export const api = {
   updateDashboardLink: (id: number, name: string, url: string) =>
     sendJson<DashboardLink>("PUT", `/frontline/metric-dashboard/links/${id}`, { name, url }),
   deleteDashboardLink: (id: number) => del(`/frontline/metric-dashboard/links/${id}`),
+  frontlineAgents: () => get<FrontlineAgent[]>("/frontline/agents"),
+  addFrontlineAgent: (name: string, email: string, slackId: string) =>
+    sendJson<FrontlineAgent>("POST", "/frontline/agents", { name, email, slack_id: slackId || null }),
+  updateFrontlineAgent: (id: number, name: string, email: string, slackId: string) =>
+    sendJson<FrontlineAgent>("PUT", `/frontline/agents/${id}`, { name, email, slack_id: slackId || null }),
+  deleteFrontlineAgent: (id: number) => del(`/frontline/agents/${id}`),
+  setFrontlineAgentShifts: (id: number, shifts: AgentShift[]) =>
+    sendJson<FrontlineAgent>("PUT", `/frontline/agents/${id}/shifts`, { shifts }),
+  onShiftNow: () => get<OnShiftAgent[]>("/frontline/on-shift"),
   anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
   uncategorized: (period: Period) =>
     get<UncategorizedTickets>("/quality/uncategorized", { period }),

@@ -7,7 +7,8 @@ export type DashboardTab =
   | "customers"
   | "events"
   | "content_oncall"
-  | "frontline_metrics";
+  | "frontline_metrics"
+  | "frontline_agents";
 
 const TABS: { key: DashboardTab; label: string; sub: string; accent: string; requiresAuth?: boolean }[] = [
   { key: "overview", label: "Overview", sub: "Org-wide", accent: "var(--accent-blue)" },
@@ -20,6 +21,13 @@ const TABS: { key: DashboardTab; label: string; sub: string; accent: string; req
     key: "frontline_metrics",
     label: "Frontline Metric Dashboard",
     sub: "Quarterly rollup",
+    accent: "var(--accent-aqua)",
+    requiresAuth: true,
+  },
+  {
+    key: "frontline_agents",
+    label: "Frontline Agents",
+    sub: "Shift timings",
     accent: "var(--accent-aqua)",
     requiresAuth: true,
   },

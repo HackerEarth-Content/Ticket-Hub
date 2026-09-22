@@ -389,6 +389,31 @@ export interface DashboardLink {
   url: string;
 }
 
+export interface AgentShift {
+  day_of_week: number; // 0=Monday .. 6=Sunday
+  is_week_off: boolean;
+  is_holiday: boolean;
+  start_time: string | null; // "HH:MM", IST wall-clock
+  end_time: string | null; // "HH:MM"; < start_time means it crosses midnight
+}
+
+export interface FrontlineAgent {
+  id: number;
+  name: string;
+  email: string;
+  slack_id: string | null;
+  shifts: AgentShift[]; // always 7 entries, one per day_of_week
+}
+
+// Public counterpart of FrontlineAgent -- only agents on shift right now,
+// and only the fields the "On shift now" strip needs (no schedule).
+export interface OnShiftAgent {
+  id: number;
+  name: string;
+  email: string;
+  slack_id: string | null;
+}
+
 export interface SyncStatus {
   last_synced_at: string | null;
   total_ticket_count: number;
