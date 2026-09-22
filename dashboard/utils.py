@@ -160,18 +160,28 @@ def _parse_iso(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+_SUPPORT_PIPELINE_ID = "0"
+
+
 async def get_live_today(session: AsyncSession) -> dict:
+    """Scoped to the Support Pipeline only -- GT Support, Customer Success,
+    and Marketing Support tickets don't belong in this live snapshot."""
     now = datetime.now(timezone.utc)
     today_start = _ist_today_start(now)
 
     status_rows = await session.execute(
         select(Ticket.canonical_status, func.count())
-        .where(Ticket.canonical_status.in_(_OPEN_STATUSES))
+        .where(
+            Ticket.canonical_status.in_(_OPEN_STATUSES),
+            Ticket.pipeline_id == _SUPPORT_PIPELINE_ID,
+        )
         .group_by(Ticket.canonical_status)
     )
     resolved_today = await session.scalar(
         select(func.count()).where(
-            Ticket.canonical_status == "Resolved", Ticket.closed_at >= today_start
+            Ticket.canonical_status == "Resolved",
+            Ticket.closed_at >= today_start,
+            Ticket.pipeline_id == _SUPPORT_PIPELINE_ID,
         )
     )
     # Backward-looking SLA compliance for today's closures (Completed on
@@ -183,6 +193,7 @@ async def get_live_today(session: AsyncSession) -> dict:
             Ticket.canonical_status == "Resolved",
             Ticket.closed_at >= today_start,
             Ticket.sla_close_status == "Completed on time",
+            Ticket.pipeline_id == _SUPPORT_PIPELINE_ID,
         )
     )
     # Live FRT compliance -- same "created today" scoping convention as
@@ -193,6 +204,7 @@ async def get_live_today(session: AsyncSession) -> dict:
         select(func.count()).where(
             Ticket.created_at >= today_start,
             Ticket.time_to_first_agent_reply_hours.isnot(None),
+            Ticket.pipeline_id == _SUPPORT_PIPELINE_ID,
         )
     )
     first_response_on_time_today = await session.scalar(
@@ -200,6 +212,7 @@ async def get_live_today(session: AsyncSession) -> dict:
             Ticket.created_at >= today_start,
             Ticket.time_to_first_agent_reply_hours.isnot(None),
             Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS,
+            Ticket.pipeline_id == _SUPPORT_PIPELINE_ID,
         )
     )
     return {
