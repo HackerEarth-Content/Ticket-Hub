@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { DragEvent } from "react";
 import { api } from "../api";
 import type { AgentShift, FrontlineAgent } from "../types";
 import { DAY_LABELS } from "../agentShifts";
@@ -62,7 +63,13 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
   const [infoEmail, setInfoEmail] = useState("");
   const [infoSlackId, setInfoSlackId] = useState("");
 
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [pendingSwap, setPendingSwap] = useState<{ a: FrontlineAgent; b: FrontlineAgent } | null>(null);
+  const [swapping, setSwapping] = useState(false);
+
   const anyEditing = editingAgentId !== null || editingInfoId !== null;
+  const canDrag = !anyEditing && !saving && !pendingSwap;
 
   async function addAgent() {
     if (!name.trim() || !email.trim()) return;
@@ -144,6 +151,44 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
     }
   }
 
+  function handleDragStart(agent: FrontlineAgent) {
+    if (!canDrag) return;
+    setDraggingId(agent.id);
+  }
+
+  function handleDragOver(e: DragEvent, agent: FrontlineAgent) {
+    if (draggingId !== null && draggingId !== agent.id) e.preventDefault();
+  }
+
+  function handleDragEnter(agent: FrontlineAgent) {
+    if (draggingId !== null && draggingId !== agent.id) setDragOverId(agent.id);
+  }
+
+  function handleDragLeave(agent: FrontlineAgent) {
+    setDragOverId((id) => (id === agent.id ? null : id));
+  }
+
+  function handleDrop(e: DragEvent, targetAgent: FrontlineAgent) {
+    e.preventDefault();
+    setDragOverId(null);
+    const draggedAgent = agents.find((a) => a.id === draggingId);
+    setDraggingId(null);
+    if (!draggedAgent || draggedAgent.id === targetAgent.id) return;
+    setPendingSwap({ a: draggedAgent, b: targetAgent });
+  }
+
+  async function confirmSwap() {
+    if (!pendingSwap) return;
+    setSwapping(true);
+    try {
+      await api.swapFrontlineAgentShifts(pendingSwap.a.id, pendingSwap.b.id);
+      setPendingSwap(null);
+      onChanged();
+    } finally {
+      setSwapping(false);
+    }
+  }
+
   return (
     <div className="card card-lg">
       <div className="card-head">
@@ -204,7 +249,20 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
               <tr>
                 <th>Day</th>
                 {agents.map((agent) => (
-                  <th key={agent.id}>
+                  <th
+                    key={agent.id}
+                    className={[
+                      draggingId === agent.id ? "dragging" : "",
+                      draggingId !== null && draggingId !== agent.id ? "drop-target" : "",
+                      dragOverId === agent.id ? "drop-target-hover" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onDragOver={(e) => handleDragOver(e, agent)}
+                    onDragEnter={() => handleDragEnter(agent)}
+                    onDragLeave={() => handleDragLeave(agent)}
+                    onDrop={(e) => handleDrop(e, agent)}
+                  >
                     {editingInfoId === agent.id ? (
                       <div className="agent-info-edit">
                         <input
@@ -249,7 +307,15 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
                       </div>
                     ) : (
                       <div className="agent-col-head">
-                        <span>{agent.name}</span>
+                        <span
+                          className={`agent-name ${canDrag ? "agent-name-draggable" : ""}`}
+                          draggable={canDrag}
+                          onDragStart={() => handleDragStart(agent)}
+                          onDragEnd={() => setDraggingId(null)}
+                          title={canDrag ? "Drag onto another agent to swap their shifts" : agent.name}
+                        >
+                          {agent.name}
+                        </span>
                         {editingAgentId === agent.id ? (
                           <span className="fl-actions">
                             <button className="icon-btn" onClick={saveShifts} disabled={saving} title="Save">
@@ -348,6 +414,27 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {pendingSwap && (
+        <div className="modal-backdrop" onClick={() => !swapping && setPendingSwap(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Swap shifts?</div>
+            <div className="modal-body">
+              <strong>{pendingSwap.a.name}</strong> and <strong>{pendingSwap.b.name}</strong> will swap
+              their entire weekly schedules (including week-offs and holidays). You can undo this by
+              dragging them onto each other again.
+            </div>
+            <div className="modal-actions">
+              <button className="table-toggle" onClick={() => setPendingSwap(null)} disabled={swapping}>
+                Cancel
+              </button>
+              <button className="table-toggle time-picker-ok" onClick={confirmSwap} disabled={swapping}>
+                {swapping ? "Swapping…" : "Swap"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -7,6 +7,7 @@ const POLL_INTERVAL_MS = 30_000;
 interface State {
   loading: boolean;
   agents: OnShiftAgent[];
+  refresh: () => void;
 }
 
 /** Public, unauthenticated -- powers the "On shift now" row inside the live
@@ -34,5 +35,5 @@ export function useOnShiftNow(): State {
     return () => clearInterval(id);
   }, [fetchOnce]);
 
-  return { loading, agents };
+  return { loading, agents, refresh: fetchOnce };
 }

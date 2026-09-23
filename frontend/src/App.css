@@ -582,6 +582,63 @@ h1 {
   font-weight: 700;
   color: var(--ink);
 }
+.agent-name-draggable {
+  cursor: grab;
+}
+.agent-name-draggable:active {
+  cursor: grabbing;
+}
+/* While one agent's name is being dragged, every OTHER column header (not
+   the one being dragged) gets a dashed highlight -- makes it obvious at a
+   glance which columns are valid drop targets, per the "only show the
+   other agents' slots" request. */
+.shift-table thead th.dragging {
+  opacity: 0.5;
+}
+.shift-table thead th.drop-target {
+  background: color-mix(in srgb, var(--accent-aqua) 10%, var(--surface-2));
+  outline: 2px dashed color-mix(in srgb, var(--accent-aqua) 50%, transparent);
+  outline-offset: -2px;
+}
+.shift-table thead th.drop-target-hover {
+  background: color-mix(in srgb, var(--accent-aqua) 22%, var(--surface-2));
+  outline-color: var(--accent-aqua);
+}
+
+/* ---- generic confirm modal (swap, etc.) ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-dialog {
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow-hover);
+  padding: 22px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.modal-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.modal-body {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
 .shift-pill,
 .weekoff-pill,
 .holiday-pill {

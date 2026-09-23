@@ -66,7 +66,16 @@ export default function App() {
   const { data: frontlineMetricDashboard, loading: frontlineMetricDashboardLoading } =
     useFrontlineMetricDashboard(!!user, refreshTick);
   const { agents, loading: agentsLoading, refresh: refreshAgents } = useFrontlineAgents(!!user);
-  const { agents: onShiftAgents, loading: onShiftLoading } = useOnShiftNow();
+  const { agents: onShiftAgents, loading: onShiftLoading, refresh: refreshOnShiftNow } = useOnShiftNow();
+
+  // The roster table and the public "on shift now" strip are two separate
+  // fetches (one gated, one not) -- any edit in the table (add/remove/edit
+  // agent, edit shifts, swap) needs to refresh both, or the strip would sit
+  // stale until its next 30s poll.
+  function handleAgentsChanged() {
+    refreshAgents();
+    refreshOnShiftNow();
+  }
 
   // The tab is auth-gated (TabNav drops it from the nav for signed-out
   // visitors) -- if a signed-in user is on it and then signs out, bounce
@@ -413,7 +422,7 @@ export default function App() {
       {tab === "frontline_agents" && user && (
         <>
           <SectionHeading title="Frontline Agents" color="var(--accent-aqua)" />
-          <FrontlineAgentsCard agents={agents} loading={agentsLoading} onChanged={refreshAgents} />
+          <FrontlineAgentsCard agents={agents} loading={agentsLoading} onChanged={handleAgentsChanged} />
         </>
       )}
 

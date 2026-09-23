@@ -163,6 +163,45 @@ async def delete_agent(session: AsyncSession, agent_id: int) -> None:
     await session.commit()
 
 
+async def swap_agent_shifts(
+    session: AsyncSession, agent_a_id: int, agent_b_id: int
+) -> dict | None:
+    """Swaps two agents' entire weekly shift patterns (all 7 days, including
+    week-off/holiday flags) -- for the common case where the *time slots*
+    stay the same month to month and only who's in each one rotates. Only
+    AgentShift.agent_id moves; each agent keeps their own name/email/Slack
+    ID, since it's the schedule that's changing hands, not the person."""
+    if agent_a_id == agent_b_id:
+        return None
+    agent_a = await session.get(FrontlineAgent, agent_a_id)
+    agent_b = await session.get(FrontlineAgent, agent_b_id)
+    if agent_a is None or agent_b is None:
+        return None
+    shifts_a = list(
+        (
+            await session.scalars(
+                select(AgentShift).where(AgentShift.agent_id == agent_a_id)
+            )
+        ).all()
+    )
+    shifts_b = list(
+        (
+            await session.scalars(
+                select(AgentShift).where(AgentShift.agent_id == agent_b_id)
+            )
+        ).all()
+    )
+    for shift in shifts_a:
+        shift.agent_id = agent_b_id
+    for shift in shifts_b:
+        shift.agent_id = agent_a_id
+    await session.commit()
+    return {
+        "a": _agent_dict(agent_a, shifts_b),
+        "b": _agent_dict(agent_b, shifts_a),
+    }
+
+
 async def set_agent_shifts(
     session: AsyncSession, agent_id: int, shifts: list[dict]
 ) -> dict | None:

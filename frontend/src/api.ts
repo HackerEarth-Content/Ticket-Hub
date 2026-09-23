@@ -141,6 +141,11 @@ export const api = {
   deleteFrontlineAgent: (id: number) => del(`/frontline/agents/${id}`),
   setFrontlineAgentShifts: (id: number, shifts: AgentShift[]) =>
     sendJson<FrontlineAgent>("PUT", `/frontline/agents/${id}/shifts`, { shifts }),
+  swapFrontlineAgentShifts: (agentAId: number, agentBId: number) =>
+    sendJson<{ a: FrontlineAgent; b: FrontlineAgent }>("POST", "/frontline/agents/swap", {
+      agent_a_id: agentAId,
+      agent_b_id: agentBId,
+    }),
   onShiftNow: () => get<OnShiftAgent[]>("/frontline/on-shift"),
   anomalies: (period: Period) => get<DataAnomalies>("/quality/anomalies", { period }),
   uncategorized: (period: Period) =>

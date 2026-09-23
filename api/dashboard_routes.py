@@ -341,6 +341,21 @@ async def frontline_agents_set_shifts(
     return updated
 
 
+@router.post("/frontline/agents/swap")
+async def frontline_agents_swap(
+    agent_a_id: int = Body(...),
+    agent_b_id: int = Body(...),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(current_active_user),
+):
+    result = await frontline_agents.swap_agent_shifts(session, agent_a_id, agent_b_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail="Agent not found or same agent twice"
+        )
+    return result
+
+
 @router.get("/frontline/metric-dashboard/export")
 async def frontline_metric_dashboard_export():
     """Single-sheet Excel of the whole card -- every group, every quarter,
