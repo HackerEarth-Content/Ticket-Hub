@@ -4,6 +4,7 @@ import { api } from "../api";
 import type { AgentShift, FrontlineAgent } from "../types";
 import { DAY_LABELS } from "../agentShifts";
 import { TimePickerDial } from "./TimePickerDial";
+import { AgentContactCard } from "./AgentContactCard";
 
 type DayType = "working" | "week_off" | "holiday";
 
@@ -52,7 +53,7 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
   const [addingAgent, setAddingAgent] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [slackId, setSlackId] = useState("");
+  const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [editingAgentId, setEditingAgentId] = useState<number | null>(null);
@@ -61,7 +62,7 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
   const [editingInfoId, setEditingInfoId] = useState<number | null>(null);
   const [infoName, setInfoName] = useState("");
   const [infoEmail, setInfoEmail] = useState("");
-  const [infoSlackId, setInfoSlackId] = useState("");
+  const [infoPhone, setInfoPhone] = useState("");
 
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
@@ -75,11 +76,11 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
     if (!name.trim() || !email.trim()) return;
     setSaving(true);
     try {
-      const created = await api.addFrontlineAgent(name.trim(), email.trim(), slackId.trim());
+      const created = await api.addFrontlineAgent(name.trim(), email.trim(), phone.trim());
       setAddingAgent(false);
       setName("");
       setEmail("");
-      setSlackId("");
+      setPhone("");
       onChanged();
       startEditShifts(created.id, created.shifts);
     } finally {
@@ -124,14 +125,14 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
     setEditingInfoId(agent.id);
     setInfoName(agent.name);
     setInfoEmail(agent.email);
-    setInfoSlackId(agent.slack_id ?? "");
+    setInfoPhone(agent.phone ?? "");
   }
 
   async function saveInfo() {
     if (editingInfoId === null || !infoName.trim() || !infoEmail.trim()) return;
     setSaving(true);
     try {
-      await api.updateFrontlineAgent(editingInfoId, infoName.trim(), infoEmail.trim(), infoSlackId.trim());
+      await api.updateFrontlineAgent(editingInfoId, infoName.trim(), infoEmail.trim(), infoPhone.trim());
       setEditingInfoId(null);
       onChanged();
     } finally {
@@ -224,9 +225,9 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
           />
           <input
             className="select"
-            value={slackId}
-            onChange={(e) => setSlackId(e.target.value)}
-            placeholder="Slack member ID (optional)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Contact number (optional)"
             disabled={saving}
           />
           <button className="table-toggle" disabled={saving || !name.trim() || !email.trim()} onClick={addAgent}>
@@ -281,9 +282,9 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
                         />
                         <input
                           className="select"
-                          value={infoSlackId}
-                          onChange={(e) => setInfoSlackId(e.target.value)}
-                          placeholder="Slack member ID"
+                          value={infoPhone}
+                          onChange={(e) => setInfoPhone(e.target.value)}
+                          placeholder="Contact number"
                           disabled={saving}
                         />
                         <span className="fl-actions">
@@ -307,15 +308,17 @@ export function FrontlineAgentsCard({ agents, loading, onChanged }: Props) {
                       </div>
                     ) : (
                       <div className="agent-col-head">
-                        <span
-                          className={`agent-name ${canDrag ? "agent-name-draggable" : ""}`}
-                          draggable={canDrag}
-                          onDragStart={() => handleDragStart(agent)}
-                          onDragEnd={() => setDraggingId(null)}
-                          title={canDrag ? "Drag onto another agent to swap their shifts" : agent.name}
-                        >
-                          {agent.name}
-                        </span>
+                        <AgentContactCard name={agent.name} email={agent.email} phone={agent.phone} placement="bottom">
+                          <span
+                            className={`agent-name ${canDrag ? "agent-name-draggable" : ""}`}
+                            draggable={canDrag}
+                            onDragStart={() => handleDragStart(agent)}
+                            onDragEnd={() => setDraggingId(null)}
+                            title={canDrag ? "Drag onto another agent to swap their shifts" : undefined}
+                          >
+                            {agent.name}
+                          </span>
+                        </AgentContactCard>
                         {editingAgentId === agent.id ? (
                           <span className="fl-actions">
                             <button className="icon-btn" onClick={saveShifts} disabled={saving} title="Save">

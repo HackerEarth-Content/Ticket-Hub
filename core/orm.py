@@ -173,7 +173,7 @@ class FrontlineAgent(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
     email: Mapped[str]
-    slack_id: Mapped[str | None]
+    phone: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
     )

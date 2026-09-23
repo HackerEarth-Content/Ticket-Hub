@@ -10,7 +10,7 @@ interface State {
   refresh: () => void;
 }
 
-/** The full shift roster (every agent's email, Slack ID, whole week) --
+/** The full shift roster (every agent's email, phone, whole week) --
  * team-only, powers the Frontline Agents tab only. Skips the fetch entirely
  * when signed out, since the backend would 401 it anyway. The public "On
  * shift now" strip uses useOnShiftNow instead, which exposes far less. */

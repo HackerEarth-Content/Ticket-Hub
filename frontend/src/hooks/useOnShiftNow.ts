@@ -12,7 +12,7 @@ interface State {
 
 /** Public, unauthenticated -- powers the "On shift now" row inside the live
  * panel for every visitor, not just signed-in users. The backend computes
- * "on shift right now" itself and returns only name/email/slack_id for
+ * "on shift right now" itself and returns only name/email/phone for
  * those agents, so unlike useFrontlineAgents this never exposes the full
  * roster or anyone's schedule. Polled more tightly (30s) than the full
  * roster since the payload is tiny and it's the only way this strip learns

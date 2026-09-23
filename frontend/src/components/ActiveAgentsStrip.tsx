@@ -1,26 +1,21 @@
 import type { OnShiftAgent } from "../types";
+import { AgentContactCard } from "./AgentContactCard";
 
 interface Props {
   agents: OnShiftAgent[];
   loading: boolean;
 }
 
-function MailIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="2.5" y="4.5" width="19" height="15" rx="2.5" />
-      <path d="m3 6.5 9 6.5 9-6.5" />
-    </svg>
-  );
-}
+// The channel dedicated to internal comms with the support agents --
+// support-productsales.
+const SUPPORT_SLACK_CHANNEL_ID = "C09E8TJ49GA";
 
-function SlackIcon() {
+function WarningIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M7 13a2 2 0 1 1 2-2v2H7Z" />
-      <path d="M13 7a2 2 0 1 1 2 2h-2V7Z" />
-      <path d="M17 11a2 2 0 1 1-2 2v-2h2Z" />
-      <path d="M11 17a2 2 0 1 1-2-2h2v2Z" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="7.5" x2="12" y2="13.5" />
+      <circle cx="12" cy="17" r="0.5" fill="currentColor" />
     </svg>
   );
 }
@@ -42,31 +37,33 @@ export function ActiveAgentsStrip({ agents, loading }: Props) {
         <div className="active-agents-list">
           {agents.map((agent) => (
             <div key={agent.id} className="active-agent-chip">
-              <span className="active-agent-name">{agent.name}</span>
-              <a
-                className="icon-btn"
-                href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(agent.email)}`}
-                target="_blank"
-                rel="noreferrer"
-                title={`Email ${agent.name}`}
-              >
-                <MailIcon />
-              </a>
-              {agent.slack_id && (
-                <a
-                  className="icon-btn"
-                  href={`https://slack.com/app_redirect?channel=${agent.slack_id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`Slack ${agent.name}`}
-                >
-                  <SlackIcon />
-                </a>
-              )}
+              <AgentContactCard name={agent.name} email={agent.email} phone={agent.phone}>
+                <span className="active-agent-name">{agent.name}</span>
+              </AgentContactCard>
             </div>
           ))}
         </div>
       )}
+      <div className="active-agents-notes">
+        <div className="active-agents-note">
+          <WarningIcon />
+          <span>Please write to support@hackerearth.com for any support-related queries.</span>
+        </div>
+        <div className="active-agents-note">
+          <WarningIcon />
+          <span>
+            Please use the channel{" "}
+            <a
+              href={`https://slack.com/app_redirect?channel=${SUPPORT_SLACK_CHANNEL_ID}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              support-productsales
+            </a>{" "}
+            for any internal communication with the support agents.
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

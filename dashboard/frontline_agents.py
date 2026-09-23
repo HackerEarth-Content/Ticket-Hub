@@ -44,7 +44,7 @@ def _agent_dict(agent: FrontlineAgent, shifts: list[AgentShift]) -> dict:
         "id": agent.id,
         "name": agent.name,
         "email": agent.email,
-        "slack_id": agent.slack_id,
+        "phone": agent.phone,
         # Always all 7 days, even for a freshly-added agent with no shifts
         # saved yet -- the table renders a full week regardless.
         "shifts": [
@@ -100,7 +100,7 @@ def _shift_covers(shift: AgentShift, now_dow: int, now_minutes: int) -> bool:
 
 async def list_on_shift_now(session: AsyncSession) -> list[dict]:
     """Public counterpart to list_agents -- returns only the minimal contact
-    info (name/email/slack_id) for agents whose shift covers this exact
+    info (name/email/phone) for agents whose shift covers this exact
     moment, computed server-side. Deliberately never exposes an agent's full
     week schedule or the contact info of anyone NOT currently on shift, so
     it's safe to leave unauthenticated (unlike /frontline/agents)."""
@@ -123,7 +123,7 @@ async def list_on_shift_now(session: AsyncSession) -> list[dict]:
             "id": agent.id,
             "name": agent.name,
             "email": agent.email,
-            "slack_id": agent.slack_id,
+            "phone": agent.phone,
         }
         for agent in agents
         if any(
@@ -134,21 +134,21 @@ async def list_on_shift_now(session: AsyncSession) -> list[dict]:
 
 
 async def add_agent(
-    session: AsyncSession, name: str, email: str, slack_id: str | None
+    session: AsyncSession, name: str, email: str, phone: str | None
 ) -> dict:
-    agent = FrontlineAgent(name=name, email=email, slack_id=slack_id)
+    agent = FrontlineAgent(name=name, email=email, phone=phone)
     session.add(agent)
     await session.commit()
     return _agent_dict(agent, [])
 
 
 async def update_agent(
-    session: AsyncSession, agent_id: int, name: str, email: str, slack_id: str | None
+    session: AsyncSession, agent_id: int, name: str, email: str, phone: str | None
 ) -> dict | None:
     agent = await session.get(FrontlineAgent, agent_id)
     if agent is None:
         return None
-    agent.name, agent.email, agent.slack_id = name, email, slack_id
+    agent.name, agent.email, agent.phone = name, email, phone
     await session.commit()
     shifts = (
         await session.scalars(select(AgentShift).where(AgentShift.agent_id == agent_id))
@@ -169,8 +169,8 @@ async def swap_agent_shifts(
     """Swaps two agents' entire weekly shift patterns (all 7 days, including
     week-off/holiday flags) -- for the common case where the *time slots*
     stay the same month to month and only who's in each one rotates. Only
-    AgentShift.agent_id moves; each agent keeps their own name/email/Slack
-    ID, since it's the schedule that's changing hands, not the person."""
+    AgentShift.agent_id moves; each agent keeps their own name/email/phone,
+    since it's the schedule that's changing hands, not the person."""
     if agent_a_id == agent_b_id:
         return None
     agent_a = await session.get(FrontlineAgent, agent_a_id)

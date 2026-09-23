@@ -134,10 +134,10 @@ export const api = {
     sendJson<DashboardLink>("PUT", `/frontline/metric-dashboard/links/${id}`, { name, url }),
   deleteDashboardLink: (id: number) => del(`/frontline/metric-dashboard/links/${id}`),
   frontlineAgents: () => get<FrontlineAgent[]>("/frontline/agents"),
-  addFrontlineAgent: (name: string, email: string, slackId: string) =>
-    sendJson<FrontlineAgent>("POST", "/frontline/agents", { name, email, slack_id: slackId || null }),
-  updateFrontlineAgent: (id: number, name: string, email: string, slackId: string) =>
-    sendJson<FrontlineAgent>("PUT", `/frontline/agents/${id}`, { name, email, slack_id: slackId || null }),
+  addFrontlineAgent: (name: string, email: string, phone: string) =>
+    sendJson<FrontlineAgent>("POST", "/frontline/agents", { name, email, phone: phone || null }),
+  updateFrontlineAgent: (id: number, name: string, email: string, phone: string) =>
+    sendJson<FrontlineAgent>("PUT", `/frontline/agents/${id}`, { name, email, phone: phone || null }),
   deleteFrontlineAgent: (id: number) => del(`/frontline/agents/${id}`),
   setFrontlineAgentShifts: (id: number, shifts: AgentShift[]) =>
     sendJson<FrontlineAgent>("PUT", `/frontline/agents/${id}/shifts`, { shifts }),

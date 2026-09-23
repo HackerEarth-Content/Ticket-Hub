@@ -275,7 +275,7 @@ async def frontline_agents_list(
     session: AsyncSession = Depends(get_session),
     user=Depends(current_active_user),
 ):
-    """The full roster -- every agent's email, Slack ID and full week
+    """The full roster -- every agent's email, phone number and full week
     schedule. Stays behind login (powers the Frontline Agents tab only);
     see frontline_agents_on_shift below for the public "who's on shift"
     strip, which exposes far less."""
@@ -285,7 +285,7 @@ async def frontline_agents_list(
 @router.get("/frontline/on-shift")
 async def frontline_agents_on_shift(session: AsyncSession = Depends(get_session)):
     """Public, unlike frontline_agents_list above -- computed server-side so
-    it only ever returns the name/email/slack_id of agents on shift *right
+    it only ever returns the name/email/phone of agents on shift *right
     now*, never a full schedule or an off-shift agent's contact info."""
     return await frontline_agents.list_on_shift_now(session)
 
@@ -294,11 +294,11 @@ async def frontline_agents_on_shift(session: AsyncSession = Depends(get_session)
 async def frontline_agents_create(
     name: str = Body(...),
     email: str = Body(...),
-    slack_id: str | None = Body(None),
+    phone: str | None = Body(None),
     session: AsyncSession = Depends(get_session),
     user=Depends(current_active_user),
 ):
-    return await frontline_agents.add_agent(session, name, email, slack_id)
+    return await frontline_agents.add_agent(session, name, email, phone)
 
 
 @router.put("/frontline/agents/{agent_id}")
@@ -306,13 +306,11 @@ async def frontline_agents_update(
     agent_id: int,
     name: str = Body(...),
     email: str = Body(...),
-    slack_id: str | None = Body(None),
+    phone: str | None = Body(None),
     session: AsyncSession = Depends(get_session),
     user=Depends(current_active_user),
 ):
-    updated = await frontline_agents.update_agent(
-        session, agent_id, name, email, slack_id
-    )
+    updated = await frontline_agents.update_agent(session, agent_id, name, email, phone)
     if updated is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     return updated

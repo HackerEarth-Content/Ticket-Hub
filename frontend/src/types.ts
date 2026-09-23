@@ -401,7 +401,7 @@ export interface FrontlineAgent {
   id: number;
   name: string;
   email: string;
-  slack_id: string | null;
+  phone: string | null;
   shifts: AgentShift[]; // always 7 entries, one per day_of_week
 }
 
@@ -411,7 +411,7 @@ export interface OnShiftAgent {
   id: number;
   name: string;
   email: string;
-  slack_id: string | null;
+  phone: string | null;
 }
 
 export interface SyncStatus {

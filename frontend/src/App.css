@@ -509,20 +509,95 @@ h1 {
 .active-agent-chip {
   display: flex;
   align-items: center;
-  gap: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 8px 8px 8px 18px;
+  padding: 8px 18px;
 }
 .active-agent-name {
   font-size: 16px;
   font-weight: 700;
+  cursor: default;
 }
-.active-agent-chip .icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
+
+/* ---- agent contact hover card (used in the "on shift now" strip and the
+   shift roster table's column headers) ---- */
+.agent-contact {
+  position: relative;
+  display: inline-flex;
+  outline: none;
+}
+.agent-contact-card {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 190px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-hover);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.agent-contact-card-top {
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+}
+.agent-contact-card-bottom {
+  top: calc(100% + 10px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.agent-contact:hover .agent-contact-card,
+.agent-contact:focus-within .agent-contact-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.agent-contact-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.agent-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-3);
+}
+.agent-contact-row svg {
+  flex-shrink: 0;
+  color: var(--accent-aqua);
+}
+.active-agents-notes {
+  flex-basis: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.active-agents-notes a {
+  color: var(--accent-aqua);
+}
+.active-agents-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.active-agents-note svg {
+  flex-shrink: 0;
+  color: var(--accent-red);
 }
 
 /* ---- shift roster table ----
