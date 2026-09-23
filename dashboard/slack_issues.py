@@ -69,6 +69,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         .where(
             Ticket.created_at.between(period_start, period_end),
             Ticket.source_type == "Slack",
+            Ticket.actionable.is_(True),
         )
         .order_by(Ticket.created_at.desc())
     )
@@ -180,6 +181,7 @@ async def get_slack_workflow_breakdown(session: AsyncSession, period: str) -> di
         ).where(
             Ticket.created_at.between(period_start, period_end),
             Ticket.source_type == "Slack",
+            Ticket.actionable.is_(True),
         )
     )
 
