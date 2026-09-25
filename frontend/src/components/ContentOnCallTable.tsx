@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { SlackIssue, SlackIssues, SlackWorkflowTicketGroup } from "../types";
 import { hubspotTicketUrl } from "../format";
 import { PRIORITY_ORDER, priorityDisplay } from "../priority";
-import { VALIDITY_ORDER, validityDisplay } from "../validity";
+import { VALIDITY_ORDER, VALIDITY_NOT_SET, validityDisplay } from "../validity";
 
 interface Props {
   data: SlackIssues | null;
@@ -122,7 +122,7 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
   const validityOptions = useMemo(() => {
     const present = new Set(rows.map((r) => r.ticket_validity).filter((v): v is string => v != null));
     const other = Array.from(present).filter((v) => !VALIDITY_ORDER.includes(v)).sort();
-    return [...VALIDITY_ORDER, ...other];
+    return [...VALIDITY_ORDER, ...other, VALIDITY_NOT_SET];
   }, [rows]);
 
   const filtered = useMemo(
@@ -132,7 +132,10 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
           (reporterFilter === ALL || r.reporter_name === reporterFilter) &&
           (ownerFilter === ALL || (r.owner_name ?? "Unassigned") === ownerFilter) &&
           (priorityFilter === ALL || r.priority === priorityFilter) &&
-          (validityFilter === ALL || r.ticket_validity === validityFilter),
+          (validityFilter === ALL ||
+            (validityFilter === VALIDITY_NOT_SET
+              ? r.ticket_validity == null
+              : r.ticket_validity === validityFilter)),
       ),
     [rows, reporterFilter, ownerFilter, priorityFilter, validityFilter],
   );
