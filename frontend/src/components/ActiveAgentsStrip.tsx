@@ -52,7 +52,7 @@ export function ActiveAgentsStrip({ agents, loading }: Props) {
         <div className="active-agents-note">
           <WarningIcon />
           <span>
-            Please use the channel{" "}
+            Please use the slack channel{" "}
             <a
               href={`https://slack.com/app_redirect?channel=${SUPPORT_SLACK_CHANNEL_ID}`}
               target="_blank"
