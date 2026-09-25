@@ -142,6 +142,9 @@ class DashboardTicket(BaseModel):
     priority: str | None  # real hs_ticket_priority, None if blank
     derived_priority: str
     priority_inferred: bool
+    ticket_validity: (
+        str | None
+    )  # raw ticket_validity, e.g. "Valid"/"Invalid"/"Service Request"
 
     owner_id: str | None
     owner_name: str | None
@@ -237,6 +240,7 @@ class DashboardTicket(BaseModel):
             priority=raw_priority,
             derived_priority=derived,
             priority_inferred=inferred,
+            ticket_validity=props.get("ticket_validity") or None,
             owner_id=owner_id,
             owner_name=(owners or {}).get(owner_id) if owner_id else None,
             owner_assigned_at=props.get("hubspot_owner_assigneddate"),

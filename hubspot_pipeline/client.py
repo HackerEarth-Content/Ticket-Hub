@@ -34,6 +34,7 @@ TICKET_PROPERTIES = [
     "hs_ticket_category",
     "sub_category",
     "hs_ticket_priority",
+    "ticket_validity",
     "hubspot_owner_id",
     "hubspot_owner_assigneddate",
     "createdate",

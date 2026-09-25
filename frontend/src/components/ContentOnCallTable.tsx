@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { SlackIssue, SlackIssues, SlackWorkflowTicketGroup } from "../types";
 import { hubspotTicketUrl } from "../format";
 import { PRIORITY_ORDER, priorityDisplay } from "../priority";
+import { VALIDITY_ORDER, validityDisplay } from "../validity";
 
 interface Props {
   data: SlackIssues | null;
@@ -95,6 +96,7 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
   const [reporterFilter, setReporterFilter] = useState(ALL);
   const [ownerFilter, setOwnerFilter] = useState(ALL);
   const [priorityFilter, setPriorityFilter] = useState(ALL);
+  const [validityFilter, setValidityFilter] = useState(ALL);
   const [sortBy, setSortBy] = useState<StatusSort>("default");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [perPage, setPerPage] = useState(10);
@@ -114,6 +116,14 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
     const other = Array.from(present).filter((p) => !PRIORITY_ORDER.includes(p)).sort();
     return [...known, ...other];
   }, [rows]);
+  // Always show the full option set (unlike reporter/owner/priority) --
+  // ticket_validity is a newly-added HubSpot property, so most loaded rows
+  // won't have a value yet and a rows-derived list would show nothing.
+  const validityOptions = useMemo(() => {
+    const present = new Set(rows.map((r) => r.ticket_validity).filter((v): v is string => v != null));
+    const other = Array.from(present).filter((v) => !VALIDITY_ORDER.includes(v)).sort();
+    return [...VALIDITY_ORDER, ...other];
+  }, [rows]);
 
   const filtered = useMemo(
     () =>
@@ -121,9 +131,10 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
         (r) =>
           (reporterFilter === ALL || r.reporter_name === reporterFilter) &&
           (ownerFilter === ALL || (r.owner_name ?? "Unassigned") === ownerFilter) &&
-          (priorityFilter === ALL || r.priority === priorityFilter),
+          (priorityFilter === ALL || r.priority === priorityFilter) &&
+          (validityFilter === ALL || r.ticket_validity === validityFilter),
       ),
-    [rows, reporterFilter, ownerFilter, priorityFilter],
+    [rows, reporterFilter, ownerFilter, priorityFilter, validityFilter],
   );
 
   const sorted = useMemo(() => {
@@ -181,6 +192,21 @@ function IssueListing({ rows }: { rows: SlackIssue[] }) {
           {priorityOptions.map((p) => (
             <option key={p} value={p}>
               {priorityDisplay(p)}
+            </option>
+          ))}
+        </select>
+        <select
+          className="select"
+          value={validityFilter}
+          onChange={(e) => {
+            setValidityFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value={ALL}>All validities</option>
+          {validityOptions.map((v) => (
+            <option key={v} value={v}>
+              {validityDisplay(v)}
             </option>
           ))}
         </select>

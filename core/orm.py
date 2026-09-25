@@ -60,6 +60,7 @@ class Ticket(Base):
     priority: Mapped[str | None]
     derived_priority: Mapped[str]
     priority_inferred: Mapped[bool] = mapped_column(default=False)
+    ticket_validity: Mapped[str | None]
 
     owner_id: Mapped[str | None]
     owner_name: Mapped[str | None]

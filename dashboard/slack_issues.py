@@ -65,6 +65,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             Ticket.slack_workflow,
             Ticket.slack_channel,
             Ticket.derived_priority,
+            Ticket.ticket_validity,
         )
         .where(
             Ticket.created_at.between(period_start, period_end),
@@ -97,6 +98,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
         slack_workflow,
         slack_channel,
         derived_priority,
+        ticket_validity,
     ) in rows.all():
         reporter_name = reporter_contact_name or owner_name or "Unassigned"
         team = _classify_workflow(slack_workflow) or "uncategorized"
@@ -113,6 +115,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
             "priority": derived_priority,
             "team": team,
             "channel": channel,
+            "ticket_validity": ticket_validity,
         }
         issues.append(issue)
         issues_by_category[team].append(issue)

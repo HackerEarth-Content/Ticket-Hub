@@ -208,6 +208,7 @@ export interface SlackIssue {
   priority: string;
   team: string;
   channel: string;
+  ticket_validity: string | null;
 }
 
 export interface SlackReporterCounts {
