@@ -28,7 +28,7 @@ def _classify_workflow(slack_workflow: str | None) -> str | None:
     value = slack_workflow.lower()
     if "content" in value:
         return "content"
-    if "oncall" in value or "engg" in value:
+    if "oncall" in value or "engg" in value or "support intake" in value:
         return "engg_oncall"
     return None
 
