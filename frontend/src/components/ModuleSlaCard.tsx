@@ -40,6 +40,22 @@ export function ModuleSlaCard({ frt, loading }: Props) {
   };
   const allTotals = sum(rows);
 
+  // ponytail: client-side CSV of what's on screen; add an xlsx endpoint if formatting is needed.
+  function downloadCsv() {
+    const line = (name: string, t: ReturnType<typeof sum>) =>
+      [`"${name.replace(/"/g, '""')}"`, t.total, t.on, t.missed, t.pct === null ? "" : t.pct.toFixed(1)].join(",");
+    const csv = [
+      "Module,Scored tickets,On time,Missed,SLA %",
+      line("All modules", allTotals),
+      ...rows.map((r) => line(r.module, sum([r]))),
+    ].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "sla-by-module.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
     <div className="card">
       <div className="card-head">
@@ -50,6 +66,9 @@ export function ModuleSlaCard({ frt, loading }: Props) {
             modules to consolidate and chart just those
           </div>
         </div>
+        <button className="section-action" onClick={downloadCsv} disabled={loading || !rows.length}>
+          ⬇️ Download CSV
+        </button>
       </div>
       {loading ? (
         <div className="skeleton" style={{ height: 180, width: "100%" }} />
