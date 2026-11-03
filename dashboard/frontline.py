@@ -15,6 +15,9 @@ from dashboard.utils import (
     _actionable_and_resolved,
     _FRT_ALWAYS_ON_TIME,
     _FRT_SLA_HOURS,
+    _MODULE_EXCLUDED,
+    _MODULE_LABEL_MAP,
+    _MODULE_NOT_SET_LABEL,
     _percentage,
     _utc_iso,
     resolve_period,
@@ -98,6 +101,38 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         for owner_id, owner_name, on_time_n, late_n, overdue_n in by_owner_rows.all()
     ]
 
+    # Same module naming as "Volume by module" (HubSpot's own dropdown, not
+    # the derived Ticket.module) so the two cards line up.
+    module_label = func.coalesce(Ticket.hubspot_module, _MODULE_NOT_SET_LABEL)
+    by_module_rows = await session.execute(
+        select(
+            module_label,
+            func.count().filter(actionable_resolved, replied, on_time),
+            func.count().filter(actionable_resolved, replied, ~on_time),
+        )
+        .where(in_period, Ticket.hubspot_module.is_distinct_from(_MODULE_EXCLUDED))
+        .group_by(module_label)
+    )
+    merged: dict[str, list[int]] = {}
+    for label, on_time_n, late_n in by_module_rows.all():
+        counts = merged.setdefault(_MODULE_LABEL_MAP.get(label, label), [0, 0])
+        counts[0] += on_time_n
+        counts[1] += late_n
+    by_module = sorted(
+        (
+            {
+                "module": module,
+                "on_time_count": on_n,
+                "missed_count": late_n,
+                "on_time_percentage": _percentage(on_n, on_n + late_n),
+            }
+            for module, (on_n, late_n) in merged.items()
+            if on_n + late_n
+        ),
+        key=lambda m: m["on_time_count"] + m["missed_count"],
+        reverse=True,
+    )
+
     return {
         "sla_threshold_minutes": int(_FRT_SLA_HOURS * 60),
         "on_time_count": on_time_count or 0,
@@ -105,6 +140,7 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         "awaiting_reply_overdue_count": overdue_count or 0,
         "on_time_percentage": _percentage(on_time_count, evaluated),
         "by_owner": by_owner,
+        "by_module": by_module,
     }
 
 

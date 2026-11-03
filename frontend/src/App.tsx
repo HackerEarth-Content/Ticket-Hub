@@ -22,6 +22,7 @@ import { BacklineAePerformanceCard } from "./components/BacklineAePerformanceCar
 import { EscalationsTable } from "./components/EscalationsTable";
 import { StageTimingCard } from "./components/StageTimingCard";
 import { FrontlineQualityCard } from "./components/FrontlineQualityCard";
+import { ModuleSlaCard } from "./components/ModuleSlaCard";
 import { FrontlineMetricDashboardCard } from "./components/FrontlineMetricDashboardCard";
 import { ResolutionOwnershipCard } from "./components/ResolutionOwnershipCard";
 import { AnomaliesCard } from "./components/AnomaliesCard";
@@ -269,6 +270,10 @@ export default function App() {
           <div className="grid cols-2" style={{ marginBottom: 14 }}>
             <FrontlineQualityCard frt={data?.frt ?? null} fcr={data?.fcr ?? null} loading={loading} />
             <ResolutionOwnershipCard data={data?.resolutionOwnership ?? null} loading={loading} />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <ModuleSlaCard frt={data?.frt ?? null} loading={loading} />
           </div>
 
           {user && (

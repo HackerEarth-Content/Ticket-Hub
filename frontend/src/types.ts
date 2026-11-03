@@ -290,6 +290,13 @@ export interface FrontlineFrtByOwner {
   on_time_percentage: number | null;
 }
 
+export interface FrontlineFrtByModule {
+  module: string;
+  on_time_count: number;
+  missed_count: number;
+  on_time_percentage: number | null;
+}
+
 export interface FrontlineFrt {
   sla_threshold_minutes: number;
   on_time_count: number;
@@ -297,6 +304,7 @@ export interface FrontlineFrt {
   awaiting_reply_overdue_count: number;
   on_time_percentage: number | null;
   by_owner: FrontlineFrtByOwner[];
+  by_module: FrontlineFrtByModule[];
 }
 
 export interface FrontlineFcr {
