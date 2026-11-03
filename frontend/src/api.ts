@@ -204,6 +204,16 @@ export const api = {
     }
     return res.blob();
   },
+  exportModuleSla: async (period: Period): Promise<Blob> => {
+    const res = await fetch(`${BASE}/frontline/module-sla/export?period=${encodeURIComponent(period)}`);
+    if (!res.ok) {
+      throw new ApiError(
+        `GET /frontline/module-sla/export failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
+    }
+    return res.blob();
+  },
   exportEventTickets: async (eventName: string): Promise<Blob> => {
     const url = `${BASE}/events/export/tickets?event_name=${encodeURIComponent(eventName)}`;
     const res = await fetch(url);

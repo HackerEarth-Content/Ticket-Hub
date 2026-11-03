@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { FrontlineFrt } from "../types";
+import { api } from "../api";
 import { formatPercent } from "../format";
+import type { Period } from "../types";
 
 // Same fixed categorical order as ModuleDistributionCard; neutral past the ramp.
 const COLORS = [
@@ -18,11 +20,12 @@ const COLORS = [
 interface Props {
   frt: FrontlineFrt | null;
   loading: boolean;
+  period: Period;
 }
 
 /** FRT SLA per module: pie = each module's share of FRT-evaluated tickets,
  * table = per-module on-time/missed split and SLA %. */
-export function ModuleSlaCard({ frt, loading }: Props) {
+export function ModuleSlaCard({ frt, loading, period }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const rows = (frt?.by_module ?? []).map((m, i) => ({
     ...m,
@@ -40,18 +43,10 @@ export function ModuleSlaCard({ frt, loading }: Props) {
   };
   const allTotals = sum(rows);
 
-  // ponytail: client-side CSV of what's on screen; add an xlsx endpoint if formatting is needed.
-  function downloadCsv() {
-    const line = (name: string, t: ReturnType<typeof sum>) =>
-      [`"${name.replace(/"/g, '""')}"`, t.total, t.on, t.missed, t.pct === null ? "" : t.pct.toFixed(1)].join(",");
-    const csv = [
-      "Module,Scored tickets,On time,Missed,SLA %",
-      line("All modules", allTotals),
-      ...rows.map((r) => line(r.module, sum([r]))),
-    ].join("\n");
+  async function downloadExcel() {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "sla-by-module.csv";
+    a.href = URL.createObjectURL(await api.exportModuleSla(period));
+    a.download = `sla-by-module-${period.replace(/:/g, "_")}.xlsx`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -66,8 +61,8 @@ export function ModuleSlaCard({ frt, loading }: Props) {
             modules to consolidate and chart just those
           </div>
         </div>
-        <button className="section-action" onClick={downloadCsv} disabled={loading || !rows.length}>
-          ⬇️ Download CSV
+        <button className="section-action" onClick={downloadExcel} disabled={loading || !rows.length}>
+          ⬇️ Download Excel
         </button>
       </div>
       {loading ? (

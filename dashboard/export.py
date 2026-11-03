@@ -210,6 +210,43 @@ async def build_nps_workbook(session: AsyncSession, period: str) -> bytes:
     return buffer.getvalue()
 
 
+async def build_module_sla_workbook(session: AsyncSession, period: str) -> bytes:
+    """Per-module first-response SLA -- the same rows as the Frontline tab's
+    "SLA by module" card (all-modules row first)."""
+    frt = await frontline.get_frontline_frt(session, period)
+    modules = frt["by_module"]
+    on = sum(m["on_time_count"] for m in modules)
+    missed = sum(m["missed_count"] for m in modules)
+    rows = [
+        {
+            "module": "All modules",
+            "on_time_count": on,
+            "missed_count": missed,
+            "on_time_percentage": utils._percentage(on, on + missed),
+        },
+        *modules,
+    ]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SLA by module"
+    _write_table(
+        ws,
+        [
+            {
+                "Module": r["module"],
+                "Scored tickets": r["on_time_count"] + r["missed_count"],
+                "On time": r["on_time_count"],
+                "Missed": r["missed_count"],
+                "SLA %": r["on_time_percentage"],
+            }
+            for r in rows
+        ],
+    )
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 # Styling for the "customer name list" report below -- matches the
 # reference "Customer tickets raised.xlsx" workbook this feature replicates
 # (title row, blank row, blue header row, frozen at row 4).

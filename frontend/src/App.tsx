@@ -273,7 +273,7 @@ export default function App() {
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <ModuleSlaCard frt={data?.frt ?? null} loading={loading} />
+            <ModuleSlaCard frt={data?.frt ?? null} loading={loading} period={period} />
           </div>
 
           {user && (

@@ -203,6 +203,19 @@ async def frontline_frt(
     return result
 
 
+@router.get("/frontline/module-sla/export")
+async def frontline_module_sla_export(
+    period: str = PeriodParam, session: AsyncSession = Depends(get_session)
+):
+    content = await export.build_module_sla_workbook(session, period)
+    filename = f"sla-by-module-{period.replace(':', '_')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/frontline/fcr")
 async def frontline_fcr(
     period: str = PeriodParam, session: AsyncSession = Depends(get_session)
