@@ -26,16 +26,19 @@ interface Props {
 /** FRT SLA per module: pie = each module's share of FRT-evaluated tickets,
  * table = per-module on-time/missed split and SLA %. */
 export function ModuleSlaCard({ frt, loading, period }: Props) {
-  const [selected, setSelected] = useState<string[]>([]);
+  // null = untouched, which means every module is ticked
+  const [picked, setPicked] = useState<string[] | null>(null);
   const rows = (frt?.by_module ?? []).map((m, i) => ({
     ...m,
     total: m.on_time_count + m.missed_count,
     color: COLORS[i] ?? "var(--ink-3)",
   }));
   const grand = rows.reduce((s, r) => s + r.total, 0);
+  const selected = picked ?? rows.map((r) => r.module);
+  const allSelected = rows.length > 0 && selected.length === rows.length;
   const toggle = (m: string) =>
-    setSelected((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
-  const pieRows = selected.length ? rows.filter((r) => selected.includes(r.module)) : rows;
+    setPicked(selected.includes(m) ? selected.filter((x) => x !== m) : [...selected, m]);
+  const pieRows = rows.filter((r) => selected.includes(r.module));
   const sum = (rs: typeof rows) => {
     const on = rs.reduce((a, r) => a + r.on_time_count, 0);
     const missed = rs.reduce((a, r) => a + r.missed_count, 0);
@@ -57,8 +60,8 @@ export function ModuleSlaCard({ frt, loading, period }: Props) {
         <div>
           <div className="card-title">SLA by module</div>
           <div className="card-sub">
-            First-response SLA {frt ? `(${frt.sla_threshold_minutes}m)` : ""} per module · tick
-            modules to consolidate and chart just those
+            First-response SLA {frt ? `(${frt.sla_threshold_minutes}m)` : ""} per module · untick
+            modules to consolidate and chart just the rest
           </div>
         </div>
         <button className="section-action" onClick={downloadExcel} disabled={loading || !rows.length}>
@@ -76,7 +79,16 @@ export function ModuleSlaCard({ frt, loading, period }: Props) {
               <table>
                 <thead>
                   <tr>
-                    <th>Module</th>
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={() => setPicked(allSelected ? [] : null)}
+                        aria-label="Select all modules"
+                        style={{ marginRight: 8 }}
+                      />
+                      Module
+                    </th>
                     <th>Tickets</th>
                     <th>Share</th>
                     <th>On time</th>
@@ -133,7 +145,7 @@ export function ModuleSlaCard({ frt, loading, period }: Props) {
               return (
                 <div style={{ marginBottom: 8 }}>
                   <div className="card-sub" title={pieRows.map((r) => r.module).join(", ")}>
-                    {selected.length ? pieRows.map((r) => r.module).join(", ") : "All modules"}
+                    {allSelected ? "All modules" : pieRows.length ? pieRows.map((r) => r.module).join(", ") : "No modules selected"}
                   </div>
                   <div style={{ display: "flex", gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>
                     <strong style={{ fontSize: 22 }}>{formatPercent(t.pct)}</strong>
