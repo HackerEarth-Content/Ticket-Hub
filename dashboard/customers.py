@@ -152,57 +152,52 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
 
     scoped = in_period, Ticket.customer_name.in_(top_customers)
 
-    resolver_rows = await session.execute(
-        select(Ticket.customer_name, Ticket.resolution_bucket, func.count())
-        .where(*scoped)
-        .group_by(Ticket.customer_name, Ticket.resolution_bucket)
-    )
-    priority_rows = await session.execute(
-        select(Ticket.customer_name, Ticket.derived_priority, func.count())
-        .where(*scoped)
-        .group_by(Ticket.customer_name, Ticket.derived_priority)
-    )
-    # Closed/resolution SLA, not Ticket.sla_met -- that field is actually the
-    # first-response SLA flag (verified live 2026-07-09: perfectly correlated
-    # with sla_first_response_status, not sla_close_status), so it silently
-    # mislabeled this "Closed SLA compliance" column as first-response data.
-    sla_rows = await session.execute(
+    # Two queries instead of six (the rest of the per-customer numbers used to
+    # each pay their own DB round trip).
+    # (1) Per customer: every figure that is NOT a per-bucket/priority split.
+    # Backlog is "right now" -- deliberately not scoped to `in_period` -- so
+    # the WHERE admits open tickets from any date and each period-scoped
+    # figure FILTERs back down to `in_period`.
+    in_scope = Ticket.customer_name.in_(top_customers)
+    is_open = Ticket.canonical_status.in_(_OPEN_STATUSES)
+    summary_rows = await session.execute(
         select(
             Ticket.customer_name,
-            func.count().filter(Ticket.sla_close_status == "Completed on time"),
-            func.count().filter(Ticket.sla_close_status == "Completed late"),
-        )
-        .where(*scoped)
-        .group_by(Ticket.customer_name)
-    )
-    speed_rows = await session.execute(
-        select(
-            Ticket.customer_name,
-            _median_resolution_time_hours_expr(),
-            func.percentile_cont(0.5).within_group(
-                Ticket.time_to_first_agent_reply_hours
+            # Closed/resolution SLA, not Ticket.sla_met -- that field is
+            # actually the first-response SLA flag (verified live 2026-07-09:
+            # perfectly correlated with sla_first_response_status, not
+            # sla_close_status), so it silently mislabeled this "Closed SLA
+            # compliance" column as first-response data.
+            func.count().filter(
+                in_period, Ticket.sla_close_status == "Completed on time"
             ),
+            func.count().filter(in_period, Ticket.sla_close_status == "Completed late"),
+            _median_resolution_time_hours_expr().filter(
+                in_period, _actionable_and_resolved()
+            ),
+            func.percentile_cont(0.5)
+            .within_group(Ticket.time_to_first_agent_reply_hours)
+            .filter(in_period, _actionable_and_resolved()),
+            func.count().filter(in_period, Ticket.backline_path.isnot(None)),
+            func.count().filter(in_period),
+            func.count().filter(is_open),
         )
-        .where(*scoped, _actionable_and_resolved())
+        .where(in_scope, in_period | is_open)
         .group_by(Ticket.customer_name)
     )
-    escalation_rows = await session.execute(
+    # (2) Resolver and priority mixes: one grouped pass over both dimensions,
+    # summed per dimension below (counts are additive).
+    mix_rows = await session.execute(
         select(
             Ticket.customer_name,
-            func.count().filter(Ticket.backline_path.isnot(None)),
+            Ticket.resolution_bucket,
+            Ticket.derived_priority,
             func.count(),
         )
         .where(*scoped)
-        .group_by(Ticket.customer_name)
-    )
-    # Backlog is "right now" -- deliberately not scoped to `in_period`.
-    backlog_rows = await session.execute(
-        select(Ticket.customer_name, func.count())
-        .where(
-            Ticket.customer_name.in_(top_customers),
-            Ticket.canonical_status.in_(_OPEN_STATUSES),
+        .group_by(
+            Ticket.customer_name, Ticket.resolution_bucket, Ticket.derived_priority
         )
-        .group_by(Ticket.customer_name)
     )
 
     by_customer = {
@@ -220,29 +215,39 @@ async def get_customer_details(session: AsyncSession, period: str) -> dict:
         }
         for name in top_customers
     }
-    for name, bucket, count in resolver_rows.all():
-        by_customer[name]["resolution_bucket_counts"][bucket] = count
-    for name, priority, count in priority_rows.all():
-        by_customer[name]["priority_counts"][priority] = count
-    for name, met_count, breached_count in sla_rows.all():
-        by_customer[name]["sla_met_count"] = met_count
-        by_customer[name]["sla_breached_count"] = breached_count
-    for name, median_resolution, median_first_response in speed_rows.all():
-        by_customer[name]["median_resolution_time_hours"] = (
+    for name, bucket, priority, count in mix_rows.all():
+        buckets = by_customer[name]["resolution_bucket_counts"]
+        buckets[bucket] = buckets.get(bucket, 0) + count
+        priorities = by_customer[name]["priority_counts"]
+        priorities[priority] = priorities.get(priority, 0) + count
+    for (
+        name,
+        met_count,
+        breached_count,
+        median_resolution,
+        median_first_response,
+        escalated_count,
+        total_count,
+        backlog_count,
+    ) in summary_rows.all():
+        entry = by_customer[name]
+        entry["sla_met_count"] = met_count
+        entry["sla_breached_count"] = breached_count
+        entry["median_resolution_time_hours"] = (
             round(median_resolution, 1) if median_resolution is not None else None
         )
-        by_customer[name]["median_first_response_hours"] = (
+        entry["median_first_response_hours"] = (
             round(median_first_response, 1)
             if median_first_response is not None
             else None
         )
-    for name, escalated_count, total_count in escalation_rows.all():
-        by_customer[name]["escalated_count"] = escalated_count
-        by_customer[name]["escalated_percentage"] = _percentage(
-            escalated_count, total_count
-        )
-    for name, count in backlog_rows.all():
-        by_customer[name]["open_backlog_count"] = count
+        # Matches the old per-customer rows: only customers with in-period
+        # tickets got an escalation entry (a backlog-only customer keeps the
+        # None default, not 0%).
+        if total_count:
+            entry["escalated_count"] = escalated_count
+            entry["escalated_percentage"] = _percentage(escalated_count, total_count)
+        entry["open_backlog_count"] = backlog_count
 
     # Top-15-by-volume can still include a customer with zero actionable/
     # resolved tickets this period (e.g. everything's still New/Pending) --

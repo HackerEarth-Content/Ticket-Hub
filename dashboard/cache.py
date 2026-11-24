@@ -71,12 +71,21 @@ def cached(ttl: float = DEFAULT_TTL_SECONDS):
 
             if hit := _fresh():
                 return copy.deepcopy(hit[1])
-            async with _locks.setdefault(key, asyncio.Lock()):
-                if hit := _fresh():  # someone else computed it while we waited
-                    return copy.deepcopy(hit[1])
-                result = await fn(session, *args, **kwargs)
-                _evict_if_full()
-                _store[key] = (time.monotonic() + ttl, result)
+            lock = _locks.setdefault(key, asyncio.Lock())
+            try:
+                async with lock:
+                    if hit := _fresh():  # someone else computed it while we waited
+                        return copy.deepcopy(hit[1])
+                    result = await fn(session, *args, **kwargs)
+                    _evict_if_full()
+                    _store[key] = (time.monotonic() + ttl, result)
+            finally:
+                # Always drop the lock once the call is done -- including when
+                # fn raised (e.g. a bad `period`), which stores nothing and so
+                # would otherwise leave one lock behind per distinct bad key.
+                # Waiters already hold a reference to it, so they still queue.
+                if _locks.get(key) is lock:
+                    del _locks[key]
             return copy.deepcopy(result)
 
         return wrapper
