@@ -9,11 +9,12 @@ from __future__ import annotations
 import statistics
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import TIMESTAMP, Float, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import Ticket
-from dashboard.utils import _parse_iso, _percentage, resolve_period
+from dashboard.cache import cached
+from dashboard.utils import _parse_iso, _percentage, resolve_period, stage_entered_expr
 from hubspot_pipeline.stage_timing import STAGE_TIMING_STAGES
 
 _QA_PLATFORM_STAGE_KEY = "qa_platform"
@@ -54,6 +55,7 @@ def _numeric_stats(values: list[float]) -> dict:
     }
 
 
+@cached()
 async def get_backline_ae_performance(session: AsyncSession, period: str) -> dict:
     """Per-backline-AE workload and speed, split by which door the ticket
     came through (Bug Bounty vs Frontline Escalation) -- mirrors the
@@ -174,6 +176,7 @@ async def get_backline_ae_performance(session: AsyncSession, period: str) -> dic
     return {"ae_performance": ae_performance}
 
 
+@cached()
 async def get_backline_escalations(session: AsyncSession, period: str) -> dict:
     """Tickets that escalated past backline into QA/Platform or Engineering --
     the reference report's Escalations sheet."""
@@ -236,63 +239,69 @@ async def get_backline_escalations(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_backline_stage_timing(session: AsyncSession, period: str) -> dict:
     """Aggregate entered/exited/still-queued/live-wait per backline stage --
     the reference report's "P0 STAGE A/B" sections, generalized to all 4
     tracked stages instead of just 2."""
     period_start, period_end = resolve_period(period)
-    rows = await session.execute(
-        select(Ticket.stage_timings).where(
-            Ticket.created_at.between(period_start, period_end)
-        )
-    )
-    all_timings = [r[0] for r in rows.all()]
     now = datetime.now(timezone.utc)
 
+    # Aggregated in the database (one query, a handful of numbers back)
+    # instead of fetching every ticket's stage_timings JSONB blob into Python,
+    # which grew linearly with ticket volume.
+    columns = []
+    for stage_key in STAGE_TIMING_STAGES:
+        stage = Ticket.stage_timings[stage_key]
+        entered = stage_entered_expr(stage_key)
+        cumulative = stage["cumulative_hours"].astext.cast(Float)
+        columns += [
+            func.count().filter(entered),
+            func.count().filter(
+                entered, func.coalesce(stage["exited_at"].astext, "") != ""
+            ),
+            func.avg(cumulative).filter(entered),
+            func.min(cumulative).filter(entered),
+            func.max(cumulative).filter(entered),
+            # Tickets still in the stage have no cumulative_hours yet -- the
+            # longest live wait belongs to the earliest entry.
+            func.min(stage["entered_at"].astext.cast(TIMESTAMP(timezone=True))).filter(
+                entered, cumulative.is_(None)
+            ),
+        ]
+    row = (
+        await session.execute(
+            select(*columns).where(Ticket.created_at.between(period_start, period_end))
+        )
+    ).one()
+
+    def _round(value):
+        return round(float(value), 1) if value is not None else None
+
     stage_timing = {}
-    for stage_key, stage in STAGE_TIMING_STAGES.items():
-        entered_count = 0
-        exited_count = 0
-        cumulative_hours: list[float] = []
-        live_wait_hours: list[float] = []
-
-        for timings in all_timings:
-            t = timings.get(stage_key) or {}
-            entered_at = _parse_iso(t.get("entered_at"))
-            if not entered_at:
-                continue
-            entered_count += 1
-            if t.get("exited_at"):
-                exited_count += 1
-            if t.get("cumulative_hours") is not None:
-                cumulative_hours.append(t["cumulative_hours"])
-            else:
-                live_wait_hours.append((now - entered_at).total_seconds() / 3600)
-
+    for i, (stage_key, stage) in enumerate(STAGE_TIMING_STAGES.items()):
+        entered_count, exited_count, avg_h, min_h, max_h, earliest_live = row[
+            i * 6 : i * 6 + 6
+        ]
         stage_timing[stage_key] = {
             "label": stage["label"],
             "entered_count": entered_count,
             "exited_count": exited_count,
             "still_in_queue_count": entered_count - exited_count,
-            "average_cumulative_time_hours": (
-                round(sum(cumulative_hours) / len(cumulative_hours), 1)
-                if cumulative_hours
+            "average_cumulative_time_hours": _round(avg_h),
+            "minimum_cumulative_time_hours": _round(min_h),
+            "maximum_cumulative_time_hours": _round(max_h),
+            "max_live_wait_time_hours": (
+                _round((now - earliest_live).total_seconds() / 3600)
+                if earliest_live
                 else None
             ),
-            "minimum_cumulative_time_hours": (
-                round(min(cumulative_hours), 1) if cumulative_hours else None
-            ),
-            "maximum_cumulative_time_hours": (
-                round(max(cumulative_hours), 1) if cumulative_hours else None
-            ),
-            "max_live_wait_time_hours": round(max(live_wait_hours), 1)
-            if live_wait_hours
-            else None,
         }
 
     return {"stage_timing": stage_timing}
 
 
+@cached()
 async def get_backline_overview(session: AsyncSession, period: str) -> dict:
     """Overall ticket metrics scoped like the reference backline report's
     Summary sheet: total/actionable/closed/still-open across every ticket in
@@ -304,33 +313,34 @@ async def get_backline_overview(session: AsyncSession, period: str) -> dict:
     actionable = Ticket.actionable.is_(True)
     closed = Ticket.canonical_status == "Resolved"
 
-    async def _count(*extra_filters) -> int:
-        return (
-            await session.scalar(select(func.count()).where(in_period, *extra_filters))
-            or 0
+    # One scan with FILTERed counts instead of 6 queries (+ a Python pass over
+    # every actionable ticket's stage_timings blob for the Engineering count).
+    (
+        total_count,
+        actionable_count,
+        closed_count,
+        # "Backline Engineering" is resolution_taxonomy.json's bucket name for
+        # final_resolution == "Issue Resolved Backline Engineering".
+        resolved_by_backline_count,
+        fcr_true_count,
+        escalated_to_engineering_count,
+    ) = (
+        await session.execute(
+            select(
+                func.count(),
+                func.count().filter(actionable),
+                func.count().filter(actionable, closed),
+                func.count().filter(
+                    actionable, Ticket.resolution_bucket == "Backline Engineering"
+                ),
+                func.count().filter(actionable, Ticket.fcr.is_(True)),
+                func.count().filter(
+                    actionable, stage_entered_expr(_ENGINEERING_STAGE_KEY)
+                ),
+            ).where(in_period)
         )
-
-    total_count = await _count()
-    actionable_count = await _count(actionable)
-    closed_count = await _count(actionable, closed)
+    ).one()
     still_open_count = actionable_count - closed_count
-    # "Backline Engineering" is resolution_taxonomy.json's bucket name for
-    # final_resolution == "Issue Resolved Backline Engineering".
-    resolved_by_backline_count = await _count(
-        actionable, Ticket.resolution_bucket == "Backline Engineering"
-    )
-    fcr_true_count = await _count(actionable, Ticket.fcr.is_(True))
-
-    # Engineering-stage escalation lives in the stage_timings JSONB blob, so
-    # it's aggregated in Python rather than via a JSONB path query.
-    stage_timing_rows = await session.execute(
-        select(Ticket.stage_timings).where(in_period, actionable)
-    )
-    escalated_to_engineering_count = sum(
-        1
-        for (stage_timings,) in stage_timing_rows.all()
-        if (stage_timings.get(_ENGINEERING_STAGE_KEY) or {}).get("entered_at")
-    )
 
     final_resolution_rows = await session.execute(
         select(Ticket.final_resolution, func.count())

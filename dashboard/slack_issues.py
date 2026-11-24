@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import Ticket
+from dashboard.cache import cached
 from dashboard.utils import resolve_period
 
 # Same cap/shape convention as the other ticket-level drill-downs
@@ -33,6 +34,7 @@ def _classify_workflow(slack_workflow: str | None) -> str | None:
     return None
 
 
+@cached()
 async def get_slack_issues(session: AsyncSession, period: str) -> dict:
     """One row per Slack-sourced ticket: who reported it, who it's assigned
     to, and its stage (e.g. "Pending on Content (Support Pipeline)", not the
@@ -167,6 +169,7 @@ async def get_slack_issues(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_slack_workflow_breakdown(session: AsyncSession, period: str) -> dict:
     """Reporter breakdown for the two Slack ticket-creation workflows
     (Content Request, Engg On-call), for the two pie charts on the

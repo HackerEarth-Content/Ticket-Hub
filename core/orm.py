@@ -18,6 +18,7 @@ from fastapi_users.db import SQLAlchemyBaseUserTable, SQLAlchemyBaseOAuthAccount
 from sqlalchemy import (
     TIMESTAMP,
     ForeignKey,
+    Index,
     Time,
     Text,
     text,
@@ -38,6 +39,16 @@ class Ticket(Base):
     """A HubSpot ticket normalized for dashboard KPIs/charts."""
 
     __tablename__ = "tickets"
+    # Nearly every dashboard query filters a created_at range and then
+    # actionable/canonical_status -- one composite index serves them all.
+    __table_args__ = (
+        Index(
+            "ix_tickets_created_status_actionable",
+            "created_at",
+            "canonical_status",
+            "actionable",
+        ),
+    )
 
     ticket_id: Mapped[str] = mapped_column(primary_key=True)
     subject: Mapped[str] = mapped_column(default="")
@@ -72,7 +83,7 @@ class Ticket(Base):
     slack_channel: Mapped[str | None]
 
     created_at: Mapped[datetime | None] = mapped_column(index=True)
-    closed_at: Mapped[datetime | None]
+    closed_at: Mapped[datetime | None] = mapped_column(index=True)
     last_modified_at: Mapped[datetime | None] = mapped_column(index=True)
 
     sla_first_response_status: Mapped[str | None]

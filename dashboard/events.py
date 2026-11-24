@@ -11,9 +11,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import Ticket
+from dashboard.cache import cached
 from dashboard.utils import resolve_period
 
 
+@cached()
 async def get_event_names(session: AsyncSession) -> dict:
     """Every distinct event name in the DB, all-time -- feeds the event
     export's dropdown. Not period-scoped: an event from 3 months ago should
@@ -28,6 +30,7 @@ async def get_event_names(session: AsyncSession) -> dict:
     return {"event_names": [name for (name,) in rows.all()]}
 
 
+@cached()
 async def get_event_ticket_volume(session: AsyncSession, period: str) -> dict:
     """Ticket count per event, scoped to the period -- unlike get_event_names
     (all-time, feeds the export dropdown), this only lists events that

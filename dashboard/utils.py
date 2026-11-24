@@ -21,6 +21,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import CsatResponse, NpsResponse, SyncCursor, Ticket
+from dashboard.cache import cached
 
 _OPEN_STATUSES = ("New", "Open", "Pending", "Closing")
 
@@ -123,6 +124,13 @@ def _actionable_and_resolved():
     still open), so FRT/FCR/CSAT rates aren't diluted by tickets that were
     never in scope for those SLAs in the first place."""
     return Ticket.actionable.is_(True) & (Ticket.canonical_status == "Resolved")
+
+
+def stage_entered_expr(stage_key: str):
+    """SQL form of `(stage_timings.get(key) or {}).get("entered_at")` -- lets
+    callers COUNT escalations in the database instead of pulling every
+    ticket's stage_timings JSONB blob into Python (which grows with volume)."""
+    return func.coalesce(Ticket.stage_timings[stage_key]["entered_at"].astext, "") != ""
 
 
 # Resolution buckets/sources that never had a real "customer waiting on a
@@ -230,79 +238,58 @@ async def get_live_today(session: AsyncSession) -> dict:
     }
 
 
+@cached()
 async def get_summary(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
 
-    created_count = await session.scalar(
-        select(func.count()).where(Ticket.created_at.between(period_start, period_end))
-    )
-    # Scoped by created_at (like created_count above), not closed_at -- a
-    # ticket created in this period but closed after it ends is still one of
-    # this period's resolved tickets, not a miss.
-    resolved_count = await session.scalar(
-        select(func.count()).where(
-            Ticket.created_at.between(period_start, period_end),
-            Ticket.canonical_status == "Resolved",
-        )
-    )
-    median_resolution_time_hours = await session.scalar(
-        select(_median_resolution_time_hours_expr()).where(
-            Ticket.closed_at.between(period_start, period_end)
-        )
-    )
-    # MTTR (mean) alongside the median -- the reference frontline report's
-    # TTR group tracks both; median stays the primary signal (see
-    # _median_resolution_time_hours_expr) but the mean is worth surfacing too.
-    mean_resolution_time_hours = await session.scalar(
-        select(func.avg(_resolution_time_hours_expr())).where(
-            Ticket.closed_at.between(period_start, period_end)
-        )
-    )
-    # closed_at-scoped, matching median/mean_resolution_time_hours above --
-    # deliberately NOT the same population as created_count/resolved_count
-    # (which are created_at-scoped), so this needs its own matching total to
-    # percentage against, not tickets_resolved_count.
-    closed_in_period_count = await session.scalar(
-        select(func.count()).where(Ticket.closed_at.between(period_start, period_end))
-    )
-    resolved_within_48_hours_count = await session.scalar(
-        select(func.count()).where(
-            Ticket.closed_at.between(period_start, period_end),
-            _resolution_time_hours_expr() <= 48,
-        )
-    )
-
+    # Every figure below comes from ONE scan with FILTERed aggregates -- this
+    # used to be 10 separate queries, and each one paid a full DB round trip.
+    in_created = Ticket.created_at.between(period_start, period_end)
+    in_closed = Ticket.closed_at.between(period_start, period_end)
+    hours = _resolution_time_hours_expr()
     # Same-day resolution speed: tickets both created and closed within the
-    # period, as opposed to median_resolution_time_hours above which also
-    # includes older backlog tickets that happen to close in this window --
-    # those can drag the all-up median to a number that doesn't reflect how
-    # fast the team handles the tickets it opens the same day.
-    same_day_resolved = Ticket.created_at.between(
-        period_start, period_end
-    ) & Ticket.closed_at.between(period_start, period_end)
-    same_day_resolved_count = await session.scalar(
-        select(func.count()).where(same_day_resolved)
-    )
-    same_day_median_resolution_time_hours = await session.scalar(
-        select(_median_resolution_time_hours_expr()).where(same_day_resolved)
-    )
-
+    # period, as opposed to the closed_at-scoped median which also includes
+    # older backlog tickets that happen to close in this window -- those can
+    # drag the all-up median to a number that doesn't reflect how fast the
+    # team handles the tickets it opens the same day.
+    same_day_resolved = in_created & in_closed
     # Resolution SLA Compliance per the reference frontline report's TTR
     # group: actionable tickets resolved within 3 days (72h), out of all
-    # actionable tickets resolved in the period -- resolved-within-48h
-    # (above) is a different, faster-turnaround signal from this named SLA
-    # target.
-    actionable_resolved = _actionable_and_resolved() & Ticket.closed_at.between(
-        period_start, period_end
-    )
-    actionable_resolved_count = await session.scalar(
-        select(func.count()).where(actionable_resolved)
-    )
-    actionable_resolved_within_72_hours_count = await session.scalar(
-        select(func.count()).where(
-            actionable_resolved, _resolution_time_hours_expr() <= 72
+    # actionable tickets resolved in the period.
+    actionable_resolved = _actionable_and_resolved() & in_closed
+    (
+        created_count,
+        # created_at-scoped, not closed_at -- a ticket created in this period
+        # but closed after it ends is still one of this period's resolved
+        # tickets, not a miss.
+        resolved_count,
+        median_resolution_time_hours,
+        # MTTR (mean) alongside the median; median stays the primary signal.
+        mean_resolution_time_hours,
+        # closed_at-scoped, deliberately NOT the same population as
+        # created_count/resolved_count, so it needs its own matching total.
+        closed_in_period_count,
+        resolved_within_48_hours_count,
+        same_day_resolved_count,
+        same_day_median_resolution_time_hours,
+        actionable_resolved_count,
+        actionable_resolved_within_72_hours_count,
+    ) = (
+        await session.execute(
+            select(
+                func.count().filter(in_created),
+                func.count().filter(in_created, Ticket.canonical_status == "Resolved"),
+                _median_resolution_time_hours_expr().filter(in_closed),
+                func.avg(hours).filter(in_closed),
+                func.count().filter(in_closed),
+                func.count().filter(in_closed, hours <= 48),
+                func.count().filter(same_day_resolved),
+                _median_resolution_time_hours_expr().filter(same_day_resolved),
+                func.count().filter(actionable_resolved),
+                func.count().filter(actionable_resolved, hours <= 72),
+            ).where(in_created | in_closed)
         )
-    )
+    ).one()
 
     return {
         "period": period,
@@ -336,6 +323,7 @@ async def get_summary(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_volume_trend(
     session: AsyncSession, granularity: str, period: str
 ) -> list[dict]:
@@ -389,6 +377,7 @@ async def get_pipelines(session: AsyncSession) -> dict:
     }
 
 
+@cached()
 async def get_stage_distribution(
     session: AsyncSession, period: str, pipeline_id: str | None
 ) -> dict:
@@ -431,6 +420,7 @@ _MODULE_LABEL_MAP = {
 }
 
 
+@cached()
 async def get_module_distribution(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
     module_label = func.coalesce(Ticket.hubspot_module, _MODULE_NOT_SET_LABEL)
@@ -455,6 +445,7 @@ async def get_module_distribution(session: AsyncSession, period: str) -> dict:
 _DRILLDOWN_LIMIT = 100
 
 
+@cached()
 async def get_module_tickets(session: AsyncSession, period: str) -> dict:
     """Ticket-level drill-down behind each bar in the module distribution
     chart -- most recent first, capped per module."""
@@ -463,46 +454,47 @@ async def get_module_tickets(session: AsyncSession, period: str) -> dict:
     not_excluded = Ticket.hubspot_module.is_distinct_from(_MODULE_EXCLUDED)
     module_label = func.coalesce(Ticket.hubspot_module, _MODULE_NOT_SET_LABEL)
 
-    modules = await session.execute(
-        select(module_label, func.count())
+    # One query for every module's total + newest-N tickets (window functions)
+    # instead of one query per module.
+    ranked = (
+        select(
+            module_label.label("module"),
+            func.count().over(partition_by=module_label).label("total"),
+            func.row_number()
+            .over(partition_by=module_label, order_by=Ticket.created_at.desc())
+            .label("rn"),
+            Ticket.ticket_id,
+            Ticket.subject,
+            Ticket.canonical_status,
+            Ticket.owner_name,
+        )
         .where(in_period, not_excluded)
-        .group_by(module_label)
+        .subquery()
+    )
+    rows = await session.execute(
+        select(ranked)
+        .where(ranked.c.rn <= _DRILLDOWN_LIMIT)
+        .order_by(ranked.c.module, ranked.c.rn)
     )
 
-    tickets_by_module = {}
-    for module, total in modules.all():
-        module_filter = (
-            Ticket.hubspot_module.is_(None)
-            if module == _MODULE_NOT_SET_LABEL
-            else Ticket.hubspot_module == module
+    tickets_by_module: dict = {}
+    for r in rows.all():
+        entry = tickets_by_module.setdefault(
+            _MODULE_LABEL_MAP.get(r.module, r.module),
+            {"count": r.total, "tickets": [], "truncated": r.total > _DRILLDOWN_LIMIT},
         )
-        rows = await session.execute(
-            select(
-                Ticket.ticket_id,
-                Ticket.subject,
-                Ticket.canonical_status,
-                Ticket.owner_name,
-            )
-            .where(in_period, module_filter)
-            .order_by(Ticket.created_at.desc())
-            .limit(_DRILLDOWN_LIMIT)
+        entry["tickets"].append(
+            {
+                "ticket_id": r.ticket_id,
+                "subject": r.subject,
+                "canonical_status": r.canonical_status,
+                "owner_name": r.owner_name,
+            }
         )
-        tickets_by_module[_MODULE_LABEL_MAP.get(module, module)] = {
-            "count": total,
-            "tickets": [
-                {
-                    "ticket_id": r.ticket_id,
-                    "subject": r.subject,
-                    "canonical_status": r.canonical_status,
-                    "owner_name": r.owner_name,
-                }
-                for r in rows.all()
-            ],
-            "truncated": total > _DRILLDOWN_LIMIT,
-        }
     return {"tickets_by_module": tickets_by_module}
 
 
+@cached()
 async def get_source_distribution(session: AsyncSession, period: str) -> dict:
     """Channel mix (source_type) across all tickets in the period -- e.g.
     EMAIL vs CHAT vs Slack. Tickets logged straight into HubSpot have no
@@ -526,6 +518,7 @@ async def get_source_distribution(session: AsyncSession, period: str) -> dict:
     return {"by_source": by_source, "total_ticket_count": sum(by_source.values())}
 
 
+@cached()
 async def get_status_distribution(
     session: AsyncSession, period: str, pipeline_id: str | None
 ) -> dict:
@@ -539,6 +532,7 @@ async def get_status_distribution(
     return {"ticket_count_by_status": dict(rows.all())}
 
 
+@cached()
 async def get_status_tickets(
     session: AsyncSession, period: str, pipeline_id: str | None
 ) -> dict:
@@ -553,36 +547,48 @@ async def get_status_tickets(
     if pipeline_id:
         filters.append(Ticket.pipeline_id == pipeline_id)
 
-    statuses = await session.execute(
-        select(Ticket.canonical_status, func.count())
+    # One query (window functions) instead of one per status.
+    ranked = (
+        select(
+            Ticket.canonical_status.label("status"),
+            func.count().over(partition_by=Ticket.canonical_status).label("total"),
+            func.row_number()
+            .over(
+                partition_by=Ticket.canonical_status, order_by=Ticket.created_at.desc()
+            )
+            .label("rn"),
+            Ticket.ticket_id,
+            Ticket.subject,
+            Ticket.module,
+            Ticket.owner_name,
+        )
         .where(*filters)
-        .group_by(Ticket.canonical_status)
+        .subquery()
+    )
+    rows = await session.execute(
+        select(ranked)
+        .where(ranked.c.rn <= _DRILLDOWN_LIMIT)
+        .order_by(ranked.c.status, ranked.c.rn)
     )
 
-    tickets_by_status = {}
-    for status, total in statuses.all():
-        rows = await session.execute(
-            select(Ticket.ticket_id, Ticket.subject, Ticket.module, Ticket.owner_name)
-            .where(*filters, Ticket.canonical_status == status)
-            .order_by(Ticket.created_at.desc())
-            .limit(_DRILLDOWN_LIMIT)
+    tickets_by_status: dict = {}
+    for r in rows.all():
+        entry = tickets_by_status.setdefault(
+            r.status,
+            {"count": r.total, "tickets": [], "truncated": r.total > _DRILLDOWN_LIMIT},
         )
-        tickets_by_status[status] = {
-            "count": total,
-            "tickets": [
-                {
-                    "ticket_id": r.ticket_id,
-                    "subject": r.subject,
-                    "module": r.module,
-                    "owner_name": r.owner_name,
-                }
-                for r in rows.all()
-            ],
-            "truncated": total > _DRILLDOWN_LIMIT,
-        }
+        entry["tickets"].append(
+            {
+                "ticket_id": r.ticket_id,
+                "subject": r.subject,
+                "module": r.module,
+                "owner_name": r.owner_name,
+            }
+        )
     return {"tickets_by_status": tickets_by_status}
 
 
+@cached()
 async def get_median_resolution_time_by_priority(
     session: AsyncSession, period: str
 ) -> dict:
@@ -615,6 +621,7 @@ async def get_median_resolution_time_by_priority(
     }
 
 
+@cached()
 async def get_sla_kpis(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
 
@@ -675,6 +682,7 @@ def _normalized_csat_percentage(rating_counts: dict) -> float | None:
     return round((promoter * 2 + passive) / (total * 2) * 100, 1)
 
 
+@cached()
 async def get_csat(session: AsyncSession, period: str) -> dict:
     """Rating distribution plus normalized CSAT %, from HubSpot's email CSAT
     survey ("Customer Satisfaction Survey - Support", Feedback Submissions
@@ -724,6 +732,7 @@ async def get_csat(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_unmatched_csat_responses(session: AsyncSession, period: str) -> dict:
     """Drill-down list behind get_csat's `unmatched_to_ticket_count` -- CSAT
     responses HubSpot never associated to a ticket (or whose contact had no
@@ -774,6 +783,7 @@ def _nps_bucket(score: int) -> str:
     return "passive"
 
 
+@cached()
 async def get_nps(session: AsyncSession, period: str) -> dict:
     """Net Promoter Score from Wootric survey responses: promoters
     (score 9-10) minus detractors (score 0-6), as a percentage of total
@@ -849,6 +859,7 @@ async def get_nps(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     """Per-owner rollup -- volume, resolution speed, actionability, and the
     frontline/backline quality signals (FRT/FCR/backline escalation, backline
@@ -863,20 +874,6 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     # Unassigned tickets stay in their own group (owner_id/name = None) rather
     # than being dropped -- the reference report calls these out as a
     # dedicated "Unassigned" row precisely because they're a routing gap.
-    async def _count_by_owner(*extra_filters) -> dict:
-        rows = await session.execute(
-            select(Ticket.owner_id, func.count())
-            .where(in_period, *extra_filters)
-            .group_by(Ticket.owner_id)
-        )
-        return dict(rows.all())
-
-    async def _count_total(*extra_filters) -> int:
-        return (
-            await session.scalar(select(func.count()).where(in_period, *extra_filters))
-            or 0
-        )
-
     base_rows = await session.execute(
         select(
             Ticket.owner_id,
@@ -891,40 +888,51 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     )
     base = base_rows.all()
 
-    actionable_by_owner = await _count_by_owner(Ticket.actionable.is_(True))
-    closed_by_owner = await _count_by_owner(actionable_resolved)
-    frt_evaluated_by_owner = await _count_by_owner(
-        Ticket.time_to_first_agent_reply_hours.isnot(None)
+    # Every per-owner count comes from ONE grouped query (FILTERed aggregates)
+    # -- this used to be 9 queries plus a Python pass over every ticket's
+    # stage_timings blob. Owners with a zero count are simply absent from the
+    # dict, same as before (callers use .get(owner_id, 0)).
+    replied = Ticket.time_to_first_agent_reply_hours.isnot(None)
+    count_columns = {
+        "actionable": func.count().filter(Ticket.actionable.is_(True)),
+        "closed": func.count().filter(actionable_resolved),
+        "frt_evaluated": func.count().filter(replied),
+        "frt_on_time": func.count().filter(
+            replied, Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS
+        ),
+        "frt_missed": func.count().filter(
+            replied, Ticket.time_to_first_agent_reply_hours > _FRT_SLA_HOURS
+        ),
+        "fcr_evaluated": func.count().filter(Ticket.fcr.isnot(None)),
+        "fcr_true": func.count().filter(Ticket.fcr.is_(True)),
+        "escalated": func.count().filter(Ticket.backline_path.isnot(None)),
+        # "Backline Engineering" is resolution_taxonomy.json's bucket name for
+        # final_resolution == "Issue Resolved Backline Engineering".
+        "backline_resolved": func.count().filter(
+            Ticket.resolution_bucket == "Backline Engineering"
+        ),
+        "eng_escalated": func.count().filter(stage_entered_expr("engineering")),
+    }
+    owner_count_rows = await session.execute(
+        select(Ticket.owner_id, *count_columns.values())
+        .where(in_period)
+        .group_by(Ticket.owner_id)
     )
-    frt_on_time_by_owner = await _count_by_owner(
-        Ticket.time_to_first_agent_reply_hours.isnot(None),
-        Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS,
-    )
-    frt_missed_by_owner = await _count_by_owner(
-        Ticket.time_to_first_agent_reply_hours.isnot(None),
-        Ticket.time_to_first_agent_reply_hours > _FRT_SLA_HOURS,
-    )
-    fcr_evaluated_by_owner = await _count_by_owner(Ticket.fcr.isnot(None))
-    fcr_true_by_owner = await _count_by_owner(Ticket.fcr.is_(True))
-    escalated_by_owner = await _count_by_owner(Ticket.backline_path.isnot(None))
-    # "Backline Engineering" is resolution_taxonomy.json's bucket name for
-    # final_resolution == "Issue Resolved Backline Engineering".
-    backline_resolved_by_owner = await _count_by_owner(
-        Ticket.resolution_bucket == "Backline Engineering"
-    )
-
-    # Escalation into the Engineering stage lives in the stage_timings JSONB
-    # blob, not a plain column -- same pattern backline.py uses, aggregated
-    # here in Python rather than via a JSONB path query.
-    eng_stage_rows = await session.execute(
-        select(Ticket.owner_id, Ticket.stage_timings).where(in_period)
-    )
-    eng_escalated_by_owner: dict[str, int] = {}
-    for owner_id, stage_timings in eng_stage_rows.all():
-        if (stage_timings.get("engineering") or {}).get("entered_at"):
-            eng_escalated_by_owner[owner_id] = (
-                eng_escalated_by_owner.get(owner_id, 0) + 1
-            )
+    by_owner: dict[str, dict] = {name: {} for name in count_columns}
+    for owner_id, *counts in owner_count_rows.all():
+        for name, count in zip(count_columns, counts):
+            if count:
+                by_owner[name][owner_id] = count
+    actionable_by_owner = by_owner["actionable"]
+    closed_by_owner = by_owner["closed"]
+    frt_evaluated_by_owner = by_owner["frt_evaluated"]
+    frt_on_time_by_owner = by_owner["frt_on_time"]
+    frt_missed_by_owner = by_owner["frt_missed"]
+    fcr_evaluated_by_owner = by_owner["fcr_evaluated"]
+    fcr_true_by_owner = by_owner["fcr_true"]
+    escalated_by_owner = by_owner["escalated"]
+    backline_resolved_by_owner = by_owner["backline_resolved"]
+    eng_escalated_by_owner = by_owner["eng_escalated"]
 
     # Scoped by the matched ticket's created_at, same convention as every
     # other column here -- see get_csat's docstring for why submitted_at
@@ -997,13 +1005,15 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     # computed independently over every ticket in the period (assigned or
     # not) rather than summed from the per-owner rows, so its median/mean
     # are the true period-wide values, not an average of averages.
-    team_total_count = await _count_total()
-    team_median_hours = await session.scalar(
-        select(_median_resolution_time_hours_expr()).where(in_period)
-    )
-    team_mean_hours = await session.scalar(
-        select(func.avg(_resolution_time_hours_expr())).where(in_period)
-    )
+    team_total_count, team_median_hours, team_mean_hours = (
+        await session.execute(
+            select(
+                func.count(),
+                _median_resolution_time_hours_expr(),
+                func.avg(_resolution_time_hours_expr()),
+            ).where(in_period)
+        )
+    ).one()
     team_row = _owner_row(
         "team_total", "Team Total", team_total_count, team_median_hours, team_mean_hours
     )
@@ -1059,6 +1069,7 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     return [*rows, team_row]
 
 
+@cached()
 async def get_data_quality(session: AsyncSession, period: str) -> dict:
     """Scoped to Resolved tickets only -- a ticket still sitting in a Pending
     (team-routing or generic) stage hasn't necessarily been triaged yet, so

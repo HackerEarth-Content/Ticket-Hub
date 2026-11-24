@@ -7,10 +7,11 @@ KPIs) purely by domain; nothing here is architecturally special.
 from __future__ import annotations
 
 
-from sqlalchemy import func, select
+from sqlalchemy import String, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import Ticket
+from dashboard.cache import cached
 from dashboard.utils import (
     _actionable_and_resolved,
     _FRT_ALWAYS_ON_TIME,
@@ -44,6 +45,7 @@ _AWAITING_REPLY_STAGES = (
 _DRILLDOWN_LIMIT = 100
 
 
+@cached()
 async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
     """First Response Time against the 30-minute SLA -- on-time/missed for
     tickets that got a reply, plus "still waiting past SLA" for ones that
@@ -68,16 +70,6 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         & ~_FRT_ALWAYS_ON_TIME
     )
 
-    async def _counts(*extra_filters):
-        return await session.scalar(
-            select(func.count()).where(in_period, *extra_filters)
-        )
-
-    on_time_count = await _counts(actionable_resolved, replied, on_time)
-    late_count = await _counts(actionable_resolved, replied, ~on_time)
-    overdue_count = await _counts(still_waiting_overdue)
-    evaluated = (on_time_count or 0) + (late_count or 0)
-
     by_owner_rows = await session.execute(
         select(
             Ticket.owner_id,
@@ -100,6 +92,12 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         }
         for owner_id, owner_name, on_time_n, late_n, overdue_n in by_owner_rows.all()
     ]
+    # The overall counts are just the per-owner counts summed -- no need for
+    # three more round trips to recompute them.
+    on_time_count = sum(o["on_time_count"] for o in by_owner)
+    late_count = sum(o["missed_count"] for o in by_owner)
+    overdue_count = sum(o["awaiting_reply_overdue_count"] for o in by_owner)
+    evaluated = on_time_count + late_count
 
     # Same module naming as "Volume by module" (HubSpot's own dropdown, not
     # the derived Ticket.module) so the two cards line up.
@@ -144,6 +142,7 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_frontline_fcr(session: AsyncSession, period: str) -> dict:
     """First Contact Resolution -- overall rate and the "resolved fast"
     quality signal (FCR tickets closed within 24h)."""
@@ -157,19 +156,15 @@ async def get_frontline_fcr(session: AsyncSession, period: str) -> dict:
         <= _FCR_FAST_RESOLUTION_HOURS
     )
 
-    fcr_true = await session.scalar(
-        select(func.count()).where(in_period, actionable_resolved, Ticket.fcr.is_(True))
-    )
-    fcr_false = await session.scalar(
-        select(func.count()).where(
-            in_period, actionable_resolved, Ticket.fcr.is_(False)
+    fcr_true, fcr_false, fcr_fast = (
+        await session.execute(
+            select(
+                func.count().filter(Ticket.fcr.is_(True)),
+                func.count().filter(Ticket.fcr.is_(False)),
+                func.count().filter(Ticket.fcr.is_(True), resolved_within_a_day),
+            ).where(in_period, actionable_resolved)
         )
-    )
-    fcr_fast = await session.scalar(
-        select(func.count()).where(
-            in_period, actionable_resolved, Ticket.fcr.is_(True), resolved_within_a_day
-        )
-    )
+    ).one()
     evaluated = (fcr_true or 0) + (fcr_false or 0)
 
     return {
@@ -181,6 +176,7 @@ async def get_frontline_fcr(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_frontline_resolution_ownership(
     session: AsyncSession, period: str
 ) -> dict:
@@ -250,16 +246,21 @@ _ANOMALY_DEFINITIONS: dict[str, tuple] = {
 # key, so Postgres already makes that class of anomaly impossible.
 
 
+@cached()
 async def get_data_anomalies(session: AsyncSession, period: str) -> dict:
     period_start, period_end = resolve_period(period)
     in_period = Ticket.created_at.between(period_start, period_end)
 
-    anomalies_by_type = {}
-    counts = {}
-    for key, (label, filters) in _ANOMALY_DEFINITIONS.items():
-        total = await session.scalar(select(func.count()).where(in_period, *filters))
-        rows = await session.execute(
+    # Every anomaly type's newest-N tickets + its full count in ONE query (a
+    # UNION ALL of per-type branches; the window count runs before LIMIT)
+    # instead of two queries per type.
+    branches = []
+    for key, (_, filters) in _ANOMALY_DEFINITIONS.items():
+        branch = (
             select(
+                literal(key, String).label("key"),
+                func.row_number().over(order_by=Ticket.created_at.desc()).label("rn"),
+                func.count().over().label("total"),
                 Ticket.ticket_id,
                 Ticket.subject,
                 Ticket.canonical_status,
@@ -270,24 +271,35 @@ async def get_data_anomalies(session: AsyncSession, period: str) -> dict:
             .where(in_period, *filters)
             .order_by(Ticket.created_at.desc())
             .limit(_DRILLDOWN_LIMIT)
+            .subquery()
         )
-        tickets = [
-            {
-                "ticket_id": r.ticket_id,
-                "subject": r.subject,
-                "canonical_status": r.canonical_status,
-                "module": r.module,
-                "final_resolution": r.final_resolution,
-                "owner_name": r.owner_name,
-            }
-            for r in rows.all()
-        ]
-        counts[key] = total or 0
+        branches.append(select(branch))
+    union = union_all(*branches).subquery()
+    rows = (
+        await session.execute(select(union).order_by(union.c.key, union.c.rn))
+    ).all()
+
+    anomalies_by_type = {}
+    counts = {}
+    for key, (label, _) in _ANOMALY_DEFINITIONS.items():
+        type_rows = [r for r in rows if r.key == key]
+        total = type_rows[0].total if type_rows else 0
+        counts[key] = total
         anomalies_by_type[key] = {
             "label": label,
-            "count": total or 0,
-            "tickets": tickets,
-            "truncated": (total or 0) > _DRILLDOWN_LIMIT,
+            "count": total,
+            "tickets": [
+                {
+                    "ticket_id": r.ticket_id,
+                    "subject": r.subject,
+                    "canonical_status": r.canonical_status,
+                    "module": r.module,
+                    "final_resolution": r.final_resolution,
+                    "owner_name": r.owner_name,
+                }
+                for r in type_rows
+            ],
+            "truncated": total > _DRILLDOWN_LIMIT,
         }
 
     return {
@@ -297,6 +309,7 @@ async def get_data_anomalies(session: AsyncSession, period: str) -> dict:
     }
 
 
+@cached()
 async def get_uncategorized_tickets(session: AsyncSession, period: str) -> dict:
     """Drill-down list behind the data-quality `uncategorized_ticket_percentage`
     number -- resolved tickets that never got a category."""

@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orm import Ticket
+from dashboard.cache import cached
 from dashboard.utils import (
     _actionable_and_resolved,
     _median_resolution_time_hours_expr,
@@ -41,6 +42,7 @@ async def _top_customer_names(
     return [name for name, _ in rows.all()]
 
 
+@cached()
 async def get_customer_names(session: AsyncSession) -> dict:
     """Every distinct identified customer/account name in the DB, all-time --
     not period- or top-N-scoped, unlike the KPIs below, since this feeds the
@@ -55,6 +57,7 @@ async def get_customer_names(session: AsyncSession) -> dict:
     return {"customer_names": [name for (name,) in rows.all()]}
 
 
+@cached()
 async def get_customer_ticket_volume(session: AsyncSession, period: str) -> dict:
     """Ticket count per identified customer, plus how much volume has no
     identified customer at all -- that split is the headline here, not an
@@ -90,6 +93,7 @@ async def get_customer_ticket_volume(session: AsyncSession, period: str) -> dict
     }
 
 
+@cached()
 async def get_customer_status_breakdown(session: AsyncSession, period: str) -> dict:
     """Per identified customer: counts by canonical_status (few categories,
     for the stacked-bar chart) and by the more granular stage_label (for the
@@ -132,6 +136,7 @@ async def get_customer_status_breakdown(session: AsyncSession, period: str) -> d
     return {"customers": all_entries[:_TOP_N_CUSTOMERS], "all_customers": all_entries}
 
 
+@cached()
 async def get_customer_details(session: AsyncSession, period: str) -> dict:
     """Per top-N customer: who resolves their tickets (resolution_bucket),
     priority mix, SLA compliance, resolution/first-response speed, and
