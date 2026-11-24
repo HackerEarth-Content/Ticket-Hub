@@ -147,6 +147,20 @@ class SyncCursor(Base):
     last_synced_at: Mapped[datetime]
 
 
+class MetricSnapshot(Base):
+    """Precomputed Frontline Metric Dashboard numbers, one row per period
+    (e.g. "custom:2026-11-01:2026-11-30"). Written after each sync; the API
+    only reads these, so its cost no longer grows with ticket volume."""
+
+    __tablename__ = "metric_snapshots"
+
+    period: Mapped[str] = mapped_column(primary_key=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    computed_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+
+
 class DashboardLink(Base):
     """A user-added name+URL shortcut shown on a dashboard card (currently
     just the Frontline Metric Dashboard's "Links" button) -- editable and

@@ -19,6 +19,7 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from dashboard import frontline_metric_dashboard
 from hubspot_pipeline import pipeline
 from wootric_pipeline import pipeline as wootric_pipeline
 
@@ -51,6 +52,15 @@ async def _sync_once() -> None:
         )
     except Exception:
         logger.exception("incremental_sync_failed")
+        return
+
+    # Separate from the sync's try so a snapshot failure never masks (or is
+    # masked by) a sync failure; stale snapshots just get retried next cycle.
+    try:
+        refreshed = await frontline_metric_dashboard.refresh_recent_snapshots()
+        logger.info("metric_snapshots_refreshed", periods=refreshed)
+    except Exception:
+        logger.exception("metric_snapshots_refresh_failed")
 
 
 async def _reconcile_once() -> None:

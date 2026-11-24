@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import calendar
+import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -24,7 +25,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import db_manager
-from core.orm import CsatResponse, DashboardLink, NpsResponse, Ticket
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from core.orm import CsatResponse, DashboardLink, MetricSnapshot, NpsResponse, Ticket
 from dashboard import frontline, utils
 from dashboard.utils import (
     _actionable_and_resolved,
@@ -737,19 +740,72 @@ async def _period_metrics_isolated(period: str) -> dict:
         return await _period_metrics(session, period)
 
 
-async def get_frontline_metric_dashboard() -> dict:
-    now = datetime.now(timezone.utc)
+def _window_periods(now: datetime) -> tuple[list[dict], list[str]]:
+    """The rolling quarter window plus its flattened period list (3 months +
+    the quarter total, per quarter) -- the keys metric_snapshots is stored by."""
     quarters = _quarter_window(now)
-
-    # Flatten to one list of periods (3 months + achieved, per quarter) and
-    # fan them all out at once -- sequentially this endpoint was ~16 periods
-    # x ~13 queries each, one at a time; concurrently it's bounded by the
-    # slowest single period instead of their sum.
     periods = []
     for q in quarters:
         periods.extend(_period_for_month(y, m) for y, m in q["months"])
         periods.append(_period_for_quarter(q["months"]))
-    all_metrics = await asyncio.gather(*(_period_metrics_isolated(p) for p in periods))
+    return quarters, periods
+
+
+async def refresh_snapshots(periods: list[str]) -> dict[str, dict]:
+    """Recompute `periods` (concurrently, ~25 queries each) and upsert them
+    into metric_snapshots. This is the only place the heavy queries run."""
+    computed = await asyncio.gather(*(_period_metrics_isolated(p) for p in periods))
+    # Decimals (avg/percentile columns) aren't JSON-serializable; float() is
+    # what FastAPI's encoder does to them on the way out anyway.
+    result = {
+        p: json.loads(json.dumps(m, default=float)) for p, m in zip(periods, computed)
+    }
+    if result:
+        stmt = pg_insert(MetricSnapshot).values(
+            [{"period": p, "payload": m} for p, m in result.items()]
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[MetricSnapshot.period],
+            set_={"payload": stmt.excluded.payload, "computed_at": func.now()},
+        )
+        async with db_manager.session_factory()() as session:
+            await session.execute(stmt)
+            await session.commit()
+    return result
+
+
+async def refresh_recent_snapshots() -> int:
+    """Called after every sync. Only periods that can still change are
+    recomputed -- the previous month (late closes/replies), the current one
+    and anything later; older periods stay frozen until a manual
+    `python -m dashboard.frontline_metric_dashboard` backfill."""
+    now = datetime.now(timezone.utc)
+    _, periods = _window_periods(now)
+    this_year, this_month = now.astimezone(_IST).year, now.astimezone(_IST).month
+    prev_year, prev_month = _add_months(this_year, this_month, -1)
+    cutoff = f"{prev_year:04d}-{prev_month:02d}-01"
+    # Period keys end in ":YYYY-MM-DD", so the end date compares as a string.
+    recent = [p for p in periods if p.rsplit(":", 1)[1] >= cutoff]
+    await refresh_snapshots(recent)
+    return len(recent)
+
+
+async def get_frontline_metric_dashboard() -> dict:
+    now = datetime.now(timezone.utc)
+    quarters, periods = _window_periods(now)
+
+    # One cheap read instead of ~16 periods x ~25 queries. A period with no
+    # snapshot yet (fresh deploy, or the window just rolled forward) is
+    # computed once here and stored, so it's never missing.
+    async with db_manager.session_factory()() as session:
+        rows = await session.scalars(
+            select(MetricSnapshot).where(MetricSnapshot.period.in_(periods))
+        )
+        snapshots = {row.period: row.payload for row in rows}
+    missing = [p for p in periods if p not in snapshots]
+    if missing:
+        snapshots.update(await refresh_snapshots(missing))
+    all_metrics = [snapshots[p] for p in periods]
 
     result_quarters = []
     for i, q in enumerate(quarters):
@@ -797,3 +853,14 @@ async def update_dashboard_link(
 async def delete_dashboard_link(session: AsyncSession, link_id: int) -> None:
     await session.execute(sa_delete(DashboardLink).where(DashboardLink.id == link_id))
     await session.commit()
+
+
+if __name__ == "__main__":
+    # Full backfill, e.g. after changing a metric definition.
+    async def _backfill() -> None:
+        await db_manager.initialize()
+        _, all_periods = _window_periods(datetime.now(timezone.utc))
+        await refresh_snapshots(all_periods)
+        await db_manager.close()
+
+    asyncio.run(_backfill())
