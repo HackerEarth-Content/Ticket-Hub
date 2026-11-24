@@ -254,8 +254,14 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "frt_on_time_count": frt_on_time_count,
         "frt_missed_count": frt_missed_count,
         "frt_sla_breached_count": frt_sla_breached_count,
-        "frt_on_time_percentage": _percentage(frt_on_time_count, actionable_total),
-        "frt_missed_percentage": _percentage(frt_missed_count, actionable_total),
+        # Judged tickets only (like the SLA rows below), so the pair sums to
+        # 100% and open tickets don't drag the rate down.
+        "frt_on_time_percentage": _percentage(
+            frt_on_time_count, frt_on_time_count + frt_missed_count
+        ),
+        "frt_missed_percentage": _percentage(
+            frt_missed_count, frt_on_time_count + frt_missed_count
+        ),
         "frt_sla_on_time_percentage": _percentage(
             frt_sla_on_time_count, frt_sla_evaluated_count
         ),

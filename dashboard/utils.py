@@ -136,7 +136,7 @@ def _actionable_and_resolved():
 # needs to happen in one place.
 _FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(
     ("Automation", "Passed On", "Non-Actionable")
-) | (Ticket.record_source == "CRM_UI")
+) | Ticket.record_source.in_(("CRM_UI", "INTEGRATION"))  # INTEGRATION = Slack
 
 
 def _percentage(part: int | None, total: int | None) -> float | None:

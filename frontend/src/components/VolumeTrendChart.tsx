@@ -49,7 +49,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
         <div>
           <div className="card-title">Ticket volume</div>
           <div className="card-sub">
-            Created vs. resolved, by {granularity === "hour" ? "hour" : "day"}
+            Created vs. closed, by {granularity === "hour" ? "hour" : "day"}
           </div>
         </div>
         <button className="table-toggle" onClick={() => setShowTable((v) => !v)}>
@@ -68,7 +68,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
               <tr>
                 <th>{bucketLabel}</th>
                 <th className="num">Created</th>
-                <th className="num">Resolved</th>
+                <th className="num">Closed</th>
               </tr>
             </thead>
             <tbody>
@@ -135,7 +135,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
               <Area
                 type="monotone"
                 dataKey="tickets_resolved_count"
-                name="Resolved"
+                name="Closed"
                 stroke="var(--accent-aqua)"
                 strokeWidth={2.25}
                 fill="url(#fillResolved)"
@@ -156,7 +156,7 @@ export function VolumeTrendChart({ data, loading, granularity }: Props) {
             </div>
             <div className="item">
               <span className="sw" style={{ background: "var(--accent-aqua)" }} />
-              Resolved
+              Closed
             </div>
           </div>
         </>

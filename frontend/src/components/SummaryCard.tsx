@@ -29,7 +29,7 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
         ) : (
           <>
             <StatTile label="Tickets created" value={formatNumber(summary.tickets_created_count)} />
-            <StatTile label="Tickets resolved" value={formatNumber(summary.tickets_resolved_count)} />
+            <StatTile label="Tickets closed" value={formatNumber(summary.tickets_resolved_count)} />
             <StatTile
               label="Median resolution time"
               value={formatHours(summary.median_resolution_time_hours)}
@@ -47,12 +47,12 @@ export function SummaryCard({ summary, csatResponses, loading }: Props) {
               />
             )}
             <StatTile
-              label="Resolved within 3 days"
+              label="Closed within 3 days"
               value={formatPercent(summary.resolution_within_72_hours_percentage)}
-              foot="of actionable, resolved"
+              foot="of actionable, closed"
             />
             <StatTile
-              label="Resolved within 48h"
+              label="Closed within 48h"
               value={formatNumber(summary.tickets_resolved_within_48_hours_count)}
               foot={
                 summary.resolved_within_48_hours_percentage !== null
