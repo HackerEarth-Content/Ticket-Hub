@@ -146,6 +146,11 @@ _FRT_ALWAYS_ON_TIME = Ticket.resolution_bucket.in_(
     ("Automation", "Passed On", "Non-Actionable")
 ) | Ticket.record_source.in_(("CRM_UI", "INTEGRATION"))  # INTEGRATION = Slack
 
+# FCR is "<=3 emails", so Slack (INTEGRATION) and CRM-logged tickets are out.
+_FCR_EMAIL_SOURCED = Ticket.record_source.is_(None) | Ticket.record_source.notin_(
+    ("CRM_UI", "INTEGRATION")
+)
+
 
 def _percentage(part: int | None, total: int | None) -> float | None:
     return round(100 * (part or 0) / total, 1) if total else None
@@ -879,8 +884,8 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
             Ticket.owner_id,
             Ticket.owner_name,
             func.count(),
-            _median_resolution_time_hours_expr(),
-            func.avg(_resolution_time_hours_expr()),
+            _median_resolution_time_hours_expr().filter(actionable_resolved),
+            func.avg(_resolution_time_hours_expr()).filter(actionable_resolved),
         )
         .where(in_period)
         .group_by(Ticket.owner_id, Ticket.owner_name)
@@ -893,18 +898,24 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     # stage_timings blob. Owners with a zero count are simply absent from the
     # dict, same as before (callers use .get(owner_id, 0)).
     replied = Ticket.time_to_first_agent_reply_hours.isnot(None)
+    # Same FRT rule as the Frontline metric dashboard: credited tickets are
+    # on-time unconditionally, the rest need a reply within the SLA.
+    frt_on_time_expr = _FRT_ALWAYS_ON_TIME | (
+        replied & (Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS)
+    )
     count_columns = {
         "actionable": func.count().filter(Ticket.actionable.is_(True)),
         "closed": func.count().filter(actionable_resolved),
-        "frt_evaluated": func.count().filter(replied),
-        "frt_on_time": func.count().filter(
-            replied, Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS
-        ),
+        "frt_on_time": func.count().filter(actionable_resolved, frt_on_time_expr),
         "frt_missed": func.count().filter(
-            replied, Ticket.time_to_first_agent_reply_hours > _FRT_SLA_HOURS
+            actionable_resolved, replied, ~frt_on_time_expr
         ),
-        "fcr_evaluated": func.count().filter(Ticket.fcr.isnot(None)),
-        "fcr_true": func.count().filter(Ticket.fcr.is_(True)),
+        "fcr_evaluated": func.count().filter(
+            actionable_resolved, _FCR_EMAIL_SOURCED, Ticket.fcr.isnot(None)
+        ),
+        "fcr_true": func.count().filter(
+            actionable_resolved, _FCR_EMAIL_SOURCED, Ticket.fcr.is_(True)
+        ),
         "escalated": func.count().filter(Ticket.backline_path.isnot(None)),
         # "Backline Engineering" is resolution_taxonomy.json's bucket name for
         # final_resolution == "Issue Resolved Backline Engineering".
@@ -925,7 +936,6 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
                 by_owner[name][owner_id] = count
     actionable_by_owner = by_owner["actionable"]
     closed_by_owner = by_owner["closed"]
-    frt_evaluated_by_owner = by_owner["frt_evaluated"]
     frt_on_time_by_owner = by_owner["frt_on_time"]
     frt_missed_by_owner = by_owner["frt_missed"]
     fcr_evaluated_by_owner = by_owner["fcr_evaluated"]
@@ -976,7 +986,7 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
             "first_response_sla_on_time_count": frt_on_time,
             "first_response_sla_missed_count": frt_missed,
             "first_response_sla_on_time_percentage": _percentage(
-                frt_on_time, frt_evaluated_by_owner.get(owner_id, 0)
+                frt_on_time, frt_on_time + frt_missed
             ),
             "first_contact_resolution_true_count": fcr_true,
             "first_contact_resolution_percentage": _percentage(
@@ -1009,8 +1019,8 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
         await session.execute(
             select(
                 func.count(),
-                _median_resolution_time_hours_expr(),
-                func.avg(_resolution_time_hours_expr()),
+                _median_resolution_time_hours_expr().filter(actionable_resolved),
+                func.avg(_resolution_time_hours_expr()).filter(actionable_resolved),
             ).where(in_period)
         )
     ).one()
@@ -1032,7 +1042,8 @@ async def get_agent_kpis(session: AsyncSession, period: str) -> list[dict]:
     team_row["first_response_sla_missed_count"] = sum(frt_missed_by_owner.values())
     team_row["first_response_sla_on_time_percentage"] = _percentage(
         team_row["first_response_sla_on_time_count"],
-        sum(frt_evaluated_by_owner.values()),
+        team_row["first_response_sla_on_time_count"]
+        + team_row["first_response_sla_missed_count"],
     )
     team_row["first_contact_resolution_true_count"] = sum(fcr_true_by_owner.values())
     team_row["first_contact_resolution_percentage"] = _percentage(

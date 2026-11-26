@@ -14,6 +14,7 @@ from core.orm import Ticket
 from dashboard.cache import cached
 from dashboard.utils import (
     _actionable_and_resolved,
+    _FCR_EMAIL_SOURCED,
     _FRT_ALWAYS_ON_TIME,
     _FRT_SLA_HOURS,
     _MODULE_EXCLUDED,
@@ -58,7 +59,12 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
     # or still-open ticket can't skew the rate.
     actionable_resolved = _actionable_and_resolved()
     replied = Ticket.time_to_first_agent_reply_hours.isnot(None)
-    on_time = Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS
+    # Credited tickets (_FRT_ALWAYS_ON_TIME) count as on-time unconditionally,
+    # reply or not -- same rule as the Frontline metric dashboard.
+    on_time = _FRT_ALWAYS_ON_TIME | (
+        replied & (Ticket.time_to_first_agent_reply_hours <= _FRT_SLA_HOURS)
+    )
+    late = replied & ~on_time
     still_waiting_overdue = (
         Ticket.actionable.is_(True)
         & Ticket.time_to_first_agent_reply_hours.is_(None)
@@ -74,8 +80,8 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
         select(
             Ticket.owner_id,
             Ticket.owner_name,
-            func.count().filter(actionable_resolved, replied, on_time),
-            func.count().filter(actionable_resolved, replied, ~on_time),
+            func.count().filter(actionable_resolved, on_time),
+            func.count().filter(actionable_resolved, late),
             func.count().filter(still_waiting_overdue),
         )
         .where(in_period)
@@ -105,8 +111,8 @@ async def get_frontline_frt(session: AsyncSession, period: str) -> dict:
     by_module_rows = await session.execute(
         select(
             module_label,
-            func.count().filter(actionable_resolved, replied, on_time),
-            func.count().filter(actionable_resolved, replied, ~on_time),
+            func.count().filter(actionable_resolved, on_time),
+            func.count().filter(actionable_resolved, late),
         )
         .where(in_period, Ticket.hubspot_module.is_distinct_from(_MODULE_EXCLUDED))
         .group_by(module_label)
@@ -162,7 +168,7 @@ async def get_frontline_fcr(session: AsyncSession, period: str) -> dict:
                 func.count().filter(Ticket.fcr.is_(True)),
                 func.count().filter(Ticket.fcr.is_(False)),
                 func.count().filter(Ticket.fcr.is_(True), resolved_within_a_day),
-            ).where(in_period, actionable_resolved)
+            ).where(in_period, actionable_resolved, _FCR_EMAIL_SOURCED)
         )
     ).one()
     evaluated = (fcr_true or 0) + (fcr_false or 0)
