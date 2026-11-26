@@ -207,16 +207,9 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         )
     )
 
-    # HubSpot's own native SLA status, alongside this card's own custom
-    # thresholds above -- first response here (FRT group), resolution/close
-    # further down (TTR group), never mixed into the other's rows. on_time/
-    # breached share one denominator (tickets with a definitive verdict), so
-    # each pair always sums to 100%.
+    # HubSpot's own native resolution SLA status (TTR group) -- the FRT group
+    # shows only our own 30-min logic above, never HubSpot's first-response SLA.
     sla = await utils.get_sla_kpis(session, period)
-    first_response_sla_breakdown = sla["first_response_sla_status_breakdown"]
-    frt_sla_on_time_count = first_response_sla_breakdown.get("Completed on time", 0)
-    frt_sla_breached_count = first_response_sla_breakdown.get("Completed late", 0)
-    frt_sla_evaluated_count = frt_sla_on_time_count + frt_sla_breached_count
 
     # TTR/MTTR, scoped like every other metric on this card -- by the
     # ticket's created_at month, actionable tickets only -- instead of
@@ -256,7 +249,6 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "actionable_tickets": actionable_total or 0,
         "frt_on_time_count": frt_on_time_count,
         "frt_missed_count": frt_missed_count,
-        "frt_sla_breached_count": frt_sla_breached_count,
         # Judged tickets only (like the SLA rows below), so the pair sums to
         # 100% and open tickets don't drag the rate down.
         "frt_on_time_percentage": _percentage(
@@ -265,20 +257,11 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
         "frt_missed_percentage": _percentage(
             frt_missed_count, frt_on_time_count + frt_missed_count
         ),
-        "frt_sla_on_time_percentage": _percentage(
-            frt_sla_on_time_count, frt_sla_evaluated_count
-        ),
-        "frt_sla_breached_percentage": _percentage(
-            frt_sla_breached_count, frt_sla_evaluated_count
-        ),
         "fcr_true_count": fcr["fcr_true_count"],
         "fcr_false_count": fcr["fcr_false_count"],
         "fcr_within_24h_count": fcr["fcr_resolved_within_24_hours_count"],
         "fcr_percentage": fcr["first_contact_resolution_percentage"],
-        "fcr_within_24h_percentage": _percentage(
-            fcr["fcr_resolved_within_24_hours_count"],
-            fcr["fcr_true_count"] + fcr["fcr_false_count"],
-        ),
+        "fcr_within_24h_percentage": fcr["fcr_resolved_within_24_hours_percentage"],
         "mttr_hours": round(mttr_hours, 1) if mttr_hours is not None else None,
         "mttr_days": round(mttr_hours / 24, 2) if mttr_hours is not None else None,
         "median_resolution_hours": round(median_hours, 1)
@@ -354,13 +337,6 @@ async def _period_metrics(session: AsyncSession, period: str) -> dict:
     }
 
 
-_FRT_SLA_NOTE = (
-    "HubSpot's own first-response SLA status, across every ticket -- "
-    "unlike this group's FRT (30 min) on-time/missed rows above, which are "
-    "narrowed to actionable tickets with the Automation/Passed-On/CRM-UI/"
-    "Non-Actionable credit rule applied. On-time % and breached % share one denominator "
-    "(only tickets with a definitive verdict), so they always sum to 100%."
-)
 _RESOLUTION_SLA_NOTE = (
     "HubSpot's own resolution/close SLA status, across every ticket -- "
     "unlike this group's MTTR/median rows above, which are narrowed to "
@@ -396,13 +372,6 @@ METRIC_GROUPS: list[dict] = [
                 "target": "-",
             },
             {
-                "key": "frt_sla_breached_count",
-                "label": "# of SLA breached tickets (first response, HubSpot native)",
-                "format": "number",
-                "target": "-",
-                "note": _FRT_SLA_NOTE,
-            },
-            {
                 "key": "frt_on_time_percentage",
                 "label": "% of on-time FRT SLA (30 min) tickets",
                 "format": "percent",
@@ -413,20 +382,6 @@ METRIC_GROUPS: list[dict] = [
                 "label": "% of missed FRT SLA tickets",
                 "format": "percent",
                 "target": "<=20%",
-            },
-            {
-                "key": "frt_sla_on_time_percentage",
-                "label": "% SLA on-time (first response, HubSpot native)",
-                "format": "percent",
-                "target": "-",
-                "note": _FRT_SLA_NOTE,
-            },
-            {
-                "key": "frt_sla_breached_percentage",
-                "label": "% SLA breached (first response, HubSpot native)",
-                "format": "percent",
-                "target": "<=20%",
-                "note": _FRT_SLA_NOTE,
             },
         ],
     },
@@ -575,30 +530,6 @@ METRIC_GROUPS: list[dict] = [
         "key": "csat",
         "label": "CSAT",
         "metrics": [
-            {
-                "key": "csat_overall_unhappy_count",
-                "label": "Overall: # rated Unhappy (0)",
-                "format": "number",
-                "target": "-",
-            },
-            {
-                "key": "csat_overall_neutral_count",
-                "label": "Overall: # rated Neutral (1)",
-                "format": "number",
-                "target": "-",
-            },
-            {
-                "key": "csat_overall_happy_count",
-                "label": "Overall: # rated Happy (2)",
-                "format": "number",
-                "target": "-",
-            },
-            {
-                "key": "csat_overall_normalized_percentage",
-                "label": "Overall normalized CSAT %",
-                "format": "percent",
-                "target": ">=60%",
-            },
             {
                 "key": "csat_raised_unhappy_count",
                 "label": "Raised tickets: # rated Unhappy (0)",
